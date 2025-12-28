@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "youtube-auto-pub"
+version = "0.1.0"
+description = "A standalone package for YouTube API automation with encrypted credential management"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Jebin", email = "jebin@example.com"}
+]
+keywords = ["youtube", "api", "automation", "oauth", "upload"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Internet",
+    "Topic :: Multimedia :: Video",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "google-auth>=2.0.0",
+    "google-auth-oauthlib>=1.0.0",
+    "google-api-python-client>=2.0.0",
+    "huggingface_hub>=0.16.0",
+    "cryptography>=3.0.0",
+    "browser-manager @ git+https://github.com/jebin2/browser_manager.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/jebin2/youtube_auto_pub"
+Repository = "https://github.com/jebin2/youtube_auto_pub"
+
+[project.scripts]
+youtube-auth = "youtube_auto_pub.auth_worker:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["youtube_auto_pub*"]
