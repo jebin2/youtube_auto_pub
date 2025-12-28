@@ -209,7 +209,15 @@ class YouTubeUploader:
             )
             
             for line in process.stdout:
-                if "authorization_url####" in line:
+                print(f"[Auth] {line.strip()}")  # Debug output
+                # Check for both formats
+                if "Please visit this URL to authorize this application:" in line:
+                    # Format: Please visit this URL to authorize this application: https://...
+                    auth_url = f'https://{line.strip().split("https://")[-1]}'
+                    automator = GoogleOAuthAutomator(config=self.config)
+                    automator.authorize_oauth(auth_url)
+                elif "authorization_url####" in line:
+                    # Format: authorization_url####https://...
                     auth_url = line.strip().split("####")[-1]
                     automator = GoogleOAuthAutomator(config=self.config)
                     automator.authorize_oauth(auth_url)

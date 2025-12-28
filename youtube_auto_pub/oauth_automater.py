@@ -49,13 +49,14 @@ class GoogleOAuthAutomator:
         """Initialize OAuth automator.
         
         Args:
-            email: Google account email (optional, can use env var)
+            email: Google account email (optional, can use config or prompt)
             password: Google account password or app password (optional)
-            config: YouTubeConfig instance for browser settings
+            config: YouTubeConfig instance for browser settings and credentials
         """
-        self.email = email
-        self.password = password
         self.config = config or YouTubeConfig()
+        # Priority: constructor params > config values
+        self.email = email or self.config.google_email
+        self.password = password or self.config.google_password
         self.auth_code = None
         self.callback_url = None
         

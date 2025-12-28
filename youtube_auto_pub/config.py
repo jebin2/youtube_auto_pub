@@ -49,6 +49,8 @@ class YouTubeConfig:
     encryption_key: Union[str, bytes, None] = None
     docker_name: str = "youtube_auto_pub"
     host_network: bool = True
+    google_email: Optional[str] = None
+    google_password: Optional[str] = None
     
     def __post_init__(self):
         """Compute derived values after initialization."""
