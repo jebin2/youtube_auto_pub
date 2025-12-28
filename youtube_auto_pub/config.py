@@ -7,7 +7,7 @@ and environment-specific settings.
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 
 @dataclass
@@ -40,21 +40,13 @@ class YouTubeConfig:
             os.path.expanduser("~/.youtube_auto_pub_browser_profile")
         )
     )
-    is_docker: bool = field(
-        default_factory=lambda: os.getenv("IS_DOCKER", "False").lower() == "true"
-    )
-    has_display: bool = field(
-        default_factory=lambda: bool(os.environ.get('DISPLAY'))
-    )
+    is_docker: bool = False
+    has_display: bool = True
     headless_mode: bool = field(default=None)  # Will be computed if None
     hf_repo_id: str = "jebin2/Data"
     hf_repo_type: str = "dataset"
-    hf_token: Optional[str] = field(
-        default_factory=lambda: os.getenv("HF_TOKEN")
-    )
-    encryption_key: Optional[str] = field(
-        default_factory=lambda: os.getenv("CAPTION_CREATOR_ENCRYP_KEY")
-    )
+    hf_token: Optional[str] = None
+    encryption_key: Union[str, bytes, None] = None
     docker_name: str = "youtube_auto_pub"
     host_network: bool = True
     

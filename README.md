@@ -69,13 +69,13 @@ The `YouTubeConfig` dataclass accepts:
 | `headless_mode` | Auto-compute | Run browser headless |
 | `hf_repo_id` | `"jebin2/Data"` | HuggingFace repo for tokens |
 | `hf_token` | From `HF_TOKEN` env | HuggingFace API token |
-| `encryption_key` | From `CAPTION_CREATOR_ENCRYP_KEY` env | Fernet encryption key |
+| `encryption_key` | From `ENCRYPT_KEY` env | Fernet encryption key |
 
 ## Environment Variables
 
 ```bash
 export HF_TOKEN="hf_your_huggingface_token"
-export CAPTION_CREATOR_ENCRYP_KEY="your-fernet-encryption-key"
+export ENCRYPT_KEY="your-fernet-encryption-key"
 
 # Optional for OAuth automation
 export GOOGLE_EMAIL="your@gmail.com"

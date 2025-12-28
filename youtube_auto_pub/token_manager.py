@@ -57,7 +57,7 @@ class TokenManager:
         self._create_directory(self.config.encrypt_path)
         
         if not self.config.encryption_key:
-            raise ValueError("encryption_key is required in config or CAPTION_CREATOR_ENCRYP_KEY env var")
+            raise ValueError("encryption_key is required in config or ENCRYPT_KEY env var")
         
         self._encryption_key = self.config.encryption_key.encode() if isinstance(
             self.config.encryption_key, str
@@ -96,25 +96,34 @@ class TokenManager:
             file_name: Name of the file to download (not full path).
             
         Returns:
-            Local file path of the decrypted file.
+            Local file path of the decrypted file (may not exist if file
+            was not found on HuggingFace Hub - first time setup).
         """
-        local_file_path = hf_hub_download(
-            repo_id=self.config.hf_repo_id,
-            filename=file_name,
-            repo_type=self.config.hf_repo_type,
-            token=self.config.hf_token,
-            local_dir=self.config.encrypt_path
-        )
+        local_file_path = os.path.join(self.config.encrypt_path, file_name)
         
-        fernet = Fernet(self._encryption_key)
-        with open(local_file_path, "rb") as f:
-            data = fernet.decrypt(f.read()).decode("utf-8")
-        
-        with open(local_file_path, "w") as f:
-            f.write(data)
-        
-        print(f"[TokenManager] Downloaded and decrypted: {file_name}")
-        return local_file_path
+        try:
+            downloaded_path = hf_hub_download(
+                repo_id=self.config.hf_repo_id,
+                filename=file_name,
+                repo_type=self.config.hf_repo_type,
+                token=self.config.hf_token,
+                local_dir=self.config.encrypt_path
+            )
+            
+            fernet = Fernet(self._encryption_key)
+            with open(downloaded_path, "rb") as f:
+                data = fernet.decrypt(f.read()).decode("utf-8")
+            
+            with open(downloaded_path, "w") as f:
+                f.write(data)
+            
+            print(f"[TokenManager] Downloaded and decrypted: {file_name}")
+            return downloaded_path
+        except Exception as e:
+            # File doesn't exist on HuggingFace Hub (first-time setup)
+            print(f"[TokenManager] File not found on HuggingFace Hub: {file_name} ({e})")
+            print(f"[TokenManager] This is expected for first-time setup. Returning local path: {local_file_path}")
+            return local_file_path
 
     @staticmethod
     def _dir_exists(path: str) -> bool:

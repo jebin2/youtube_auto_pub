@@ -5,7 +5,6 @@ Provides automated browser interaction for Google OAuth2 flows,
 including handling 2-factor authentication and account selection.
 """
 
-import os
 import getpass
 from typing import Optional, Tuple
 
@@ -61,12 +60,11 @@ class GoogleOAuthAutomator:
         self.callback_url = None
         
     def get_credentials(self) -> Tuple[str, str]:
-        """Get email and password using three-tier approach.
+        """Get email and password using two-tier approach.
         
         Priority:
         1. From object instance (constructor parameters)
-        2. From environment variables
-        3. Prompt user for input
+        2. Prompt user for input
         
         Returns:
             Tuple of (email, password)
@@ -82,18 +80,8 @@ class GoogleOAuthAutomator:
             print("[OAuth] Using credentials from object instance")
             return email, password
         
-        # Tier 2: Check environment variables
-        if not email:
-            email = os.getenv('GOOGLE_EMAIL') or os.getenv('OAUTH_EMAIL')
-        if not password:
-            password = os.getenv('GOOGLE_PASSWORD') or os.getenv('OAUTH_PASSWORD')
-            
-        if email and password:
-            print("[OAuth] Using credentials from environment variables")
-            return email, password
-        
-        # Tier 3: Prompt user for missing credentials
-        print("[OAuth] Credentials not found in instance or environment variables")
+        # Tier 2: Prompt user for missing credentials
+        print("[OAuth] Credentials not found in instance, prompting user...")
         
         if not email:
             email = input("Enter your Google email: ").strip()
