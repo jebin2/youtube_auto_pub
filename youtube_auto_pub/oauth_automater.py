@@ -241,14 +241,16 @@ class GoogleOAuthAutomator:
             print(f"[OAuth] Page interaction loop {i+1}/{max_attempts}")
             time.sleep(10) # Give page time to settle
 
-            # 1. Check for "Select all" checkbox (Consent Page)
-            select_all = page.query_selector('input[aria-label="Select all"]')
-            if select_all:
-                print("[OAuth] Found 'Select all' checkbox")
-                # Ensure it is checked
-                if not select_all.is_checked():
-                     select_all.click(force=True)
-                     time.sleep(2)
+            # 1. Check for Checkbox inside form (Consent Page)
+            # User reported "Select all" label might be missing, so we check first checkbox in form
+            form_checkbox = page.query_selector('form input[type="checkbox"]')
+            if form_checkbox:
+                print("[OAuth] Found checkbox in form (Consent Page)")
+                
+                if not form_checkbox.is_checked():
+                     print("[OAuth] Checking checkbox")
+                     form_checkbox.click(force=True)
+                     time.sleep(1)
                 
                 # Now click Continue on this page to finish
                 continue_buttons = page.query_selector_all("button")
