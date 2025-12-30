@@ -258,54 +258,37 @@ class GoogleOAuthAutomator:
                     if button.inner_text() == "Continue":
                         print("[OAuth] Clicking final Continue")
                         
-                        # Use request interception to capture the URL even if navigation fails
-                        # Register BEFORE clicking to ensure we catch it
-                        final_url = [None]
-                        
-                        def handle_request(request):
-                            url = request.url
-                            print(f"[OAuth] Intercepted request to: {url}")
-                            # Log all requests for debugging
-                            if "localhost" in url or "code=" in url:
-                                print(f"[OAuth] Intercepted request to: {url}")
-                                if "code=" in url:
-                                    final_url[0] = url
-                        
-                        def handle_request_failed(request):
-                            url = request.url
-                            print(f"[OAuth] Failed request to: {url}")
-                            if "localhost" in url or "code=" in url:
-                                print(f"[OAuth] Failed request to: {url}")
-                                if "code=" in url:
-                                    final_url[0] = url
-
-                        page.on("request", handle_request)
-                        page.on("requestfailed", handle_request_failed)
-                        
                         # Click the button which triggers the redirect
                         button.click(force=True)
-                        time.sleep(5) # Wait for navigation attempt
                         
-                        # Wait for the request to happen
+                        # Wait for redirect and capture URL using JavaScript
+                        # page.url doesn't update on failed navigations, but window.location.href does
+                        print("[OAuth] Waiting for redirect to capture code...")
+                        
                         start_time = time.time()
+                        final_url = None
                         while time.time() - start_time < 60:
-                            if final_url[0]:
-                                break
-                            
-                            # Check page.url as fallback
-                            if "code=" in page.url or "localhost" in page.url:
-                                final_url[0] = page.url
-                                break
-                                
                             time.sleep(1)
-
-                        page.remove_listener("request", handle_request)
-                        page.remove_listener("requestfailed", handle_request_failed)
+                            try:
+                                # Use JavaScript to get the actual URL from the browser
+                                current_url = page.evaluate("window.location.href")
+                                print(f"[OAuth] Current URL (via JS): {current_url}")
+                                
+                                if "code=" in current_url or "localhost" in current_url:
+                                    final_url = current_url
+                                    break
+                            except Exception as e:
+                                print(f"[OAuth] Error getting URL: {e}")
+                                # Fallback to page.url
+                                current_url = page.url
+                                if "code=" in current_url or "localhost" in current_url:
+                                    final_url = current_url
+                                    break
                         
-                        if final_url[0]:
-                            print(f"[OAuth] Final URL captured: {final_url[0]}")
+                        if final_url:
+                            print(f"[OAuth] Final URL captured: {final_url}")
                             with open(self.config.authorization_code_path, 'w') as f:
-                                f.write(final_url[0])
+                                f.write(final_url)
                             print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
                             return True
                         else:
