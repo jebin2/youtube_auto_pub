@@ -257,14 +257,9 @@ class GoogleOAuthAutomator:
                 for button in continue_buttons:
                     if button.inner_text() == "Continue":
                         print("[OAuth] Clicking final Continue")
-                        button.click(force=True)
-                        time.sleep(5) # Wait for navigation
-                        
-                        # Wait for redirect and capture code
-                        # Wait for redirect and capture code
-                        print("[OAuth] Waiting for redirect to capture code...")
                         
                         # Use request interception to capture the URL even if navigation fails
+                        # Register BEFORE clicking to ensure we catch it
                         final_url = [None]
                         def handle_request(request):
                             if "code=" in request.url and "localhost" in request.url:
@@ -272,6 +267,10 @@ class GoogleOAuthAutomator:
                                 final_url[0] = request.url
 
                         page.on("request", handle_request)
+                        
+                        # Click the button which triggers the redirect
+                        button.click(force=True)
+                        time.sleep(5) # Wait for navigation attempt
                         
                         # Wait for the request to happen
                         start_time = time.time()
