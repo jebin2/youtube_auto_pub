@@ -10,6 +10,7 @@ Provides a clean, configurable interface for:
 import os
 import json
 import time
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -230,6 +231,29 @@ class YouTubeUploader:
         # Download and decrypt credential files
         local_token_path = self.token_manager.download_and_decrypt(token_path)
         local_client_path = self.token_manager.download_and_decrypt(client_path)
+        
+        # Check for local client secrets override/update
+        # If the user has provided a path that exists locally and differs from the stored one
+        if os.path.exists(client_path) and os.path.abspath(client_path) != os.path.abspath(local_client_path):
+            local_id = self._extract_client_id(client_path)
+            stored_id = self._extract_client_id(local_client_path)
+            
+            if local_id and local_id != stored_id:
+                print(f"[Uploader] 🔄 Detected local client secret update in '{client_path}'.")
+                print(f"[Uploader] New Client ID: ...{local_id[-10:] if local_id else 'None'}")
+                print(f"[Uploader] Old Client ID: ...{stored_id[-10:] if stored_id else 'None'}")
+                print("[Uploader] Overwriting cached secret and forcing re-authentication.")
+                
+                try:
+                    # Overwrite the stored/decrypted file with the local one
+                    shutil.copy(client_path, local_client_path)
+                    
+                    # Delete existing token to force re-auth
+                    if os.path.exists(local_token_path):
+                        os.remove(local_token_path)
+                        print(f"[Uploader] Deleted stale token: {local_token_path}")
+                except Exception as e:
+                    print(f"[Uploader] Error updating local client secret: {e}")
         
         # Validate that token was created for the current client
         current_client_id = self._extract_client_id(local_client_path)
