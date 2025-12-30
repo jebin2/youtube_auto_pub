@@ -261,15 +261,28 @@ class GoogleOAuthAutomator:
                         # Use request interception to capture the URL even if navigation fails
                         # Register BEFORE clicking to ensure we catch it
                         final_url = [None]
+                        
                         def handle_request(request):
-                            print(f"[OAuth] Intercepted request to: {request.url}")
-                            if "code=" in request.url and "localhost" in request.url:
-                                print(f"[OAuth] Intercepted request to: {request.url}")
-                                final_url[0] = request.url
+                            url = request.url
+                            print(f"[OAuth] Intercepted request to: {url}")
+                            # Log all requests for debugging
+                            if "localhost" in url or "code=" in url:
+                                print(f"[OAuth] Intercepted request to: {url}")
+                                if "code=" in url:
+                                    final_url[0] = url
+                        
+                        def handle_request_failed(request):
+                            url = request.url
+                            print(f"[OAuth] Failed request to: {url}")
+                            if "localhost" in url or "code=" in url:
+                                print(f"[OAuth] Failed request to: {url}")
+                                if "code=" in url:
+                                    final_url[0] = url
 
                         page.on("request", handle_request)
+                        page.on("requestfailed", handle_request_failed)
                         
-                        # Click the button which triggers the r1edirect
+                        # Click the button which triggers the redirect
                         button.click(force=True)
                         time.sleep(5) # Wait for navigation attempt
                         
@@ -287,6 +300,7 @@ class GoogleOAuthAutomator:
                             time.sleep(1)
 
                         page.remove_listener("request", handle_request)
+                        page.remove_listener("requestfailed", handle_request_failed)
                         
                         if final_url[0]:
                             print(f"[OAuth] Final URL captured: {final_url[0]}")
