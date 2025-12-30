@@ -139,61 +139,7 @@ class YouTubeUploader:
             print(f"[Uploader] Error checking token client_id: {e}")
             return False
 
-    def _get_authenticated_email(self, service) -> Optional[str]:
-        """Get the email of the authenticated user.
-        
-        Args:
-            service: Authenticated YouTube API service
-            
-        Returns:
-            The authenticated user's email address, or None if not available
-        """
-        try:
-            # Use the channels.list API to get the authenticated user's info
-            response = service.channels().list(
-                part='snippet',
-                mine=True
-            ).execute()
-            
-            if response.get('items'):
-                # The email isn't directly in channels API, we use userinfo
-                # Try to get email from the credentials if available
-                pass
-            
-            # Alternative: use the Google OAuth2 userinfo endpoint
-            # This requires the service credentials to have the email scope
-            from googleapiclient.discovery import build as build_service
-            
-            # Get the credentials from the service
-            creds = service._http.credentials
-            
-            # Build userinfo service
-            oauth2_service = build_service('oauth2', 'v2', credentials=creds)
-            user_info = oauth2_service.userinfo().get().execute()
-            
-            return user_info.get('email')
-        except Exception as e:
-            print(f"[Uploader] Warning: Could not get authenticated email: {e}")
-            return None
 
-    def _is_email_allowed(self, email: Optional[str]) -> bool:
-        """Check if the email is in the allowed list.
-        
-        Args:
-            email: Email address to check
-            
-        Returns:
-            True if email is allowed (case-insensitive), False otherwise
-        """
-        if not email:
-            return False
-        
-        if not self.config.allowed_emails:
-            return True  # Empty list means allow all
-        
-        # Case-insensitive comparison
-        email_lower = email.lower()
-        return any(allowed.lower() == email_lower for allowed in self.config.allowed_emails)
 
 
     def get_service(
@@ -304,18 +250,7 @@ class YouTubeUploader:
         service = build('youtube', 'v3', credentials=creds)
         print("[Uploader] YouTube service built successfully.")
         
-        # Validate authenticated email is in allowed list
-        if self.config.allowed_emails:
-            authenticated_email = self._get_authenticated_email(service)
-            if not self._is_email_allowed(authenticated_email):
-                error_msg = f"[Uploader] ⛔ Email '{authenticated_email}' is not in allowed_emails list: {self.config.allowed_emails}"
-                print(error_msg)
-                # Delete the token to force re-auth with correct account
-                if os.path.exists(local_token_path):
-                    os.remove(local_token_path)
-                    print(f"[Uploader] Deleted token for unauthorized email: {local_token_path}")
-                raise ValueError(error_msg)
-            print(f"[Uploader] ✓ Authenticated as allowed email: {authenticated_email}")
+
         
         # Cache the service
         if cache_key:
