@@ -265,31 +265,39 @@ class GoogleOAuthAutomator:
                         print("[OAuth] Waiting for redirect...")
                         time.sleep(10)
                         
-                        # Use keyboard shortcuts to capture URL from address bar
-                        # Ctrl+L focuses address bar, Ctrl+A selects all, Ctrl+C copies
-                        # Then we can read clipboard
+                        # Use xdotool via docker exec to capture URL from address bar
+                        # This works at X11 level inside the container
+                        import subprocess
+                        docker_name = self.config.docker_name
+                        
                         try:
-                            # Focus address bar
-                            page.keyboard.press("Control+l")
+                            # Focus address bar with Ctrl+L
+                            subprocess.run([
+                                'docker', 'exec', docker_name,
+                                'xdotool', 'key', 'ctrl+l'
+                            ], timeout=5, check=True)
                             time.sleep(0.5)
                             
-                            # Select all and copy
-                            page.keyboard.press("Control+a")
+                            # Select all with Ctrl+A
+                            subprocess.run([
+                                'docker', 'exec', docker_name,
+                                'xdotool', 'key', 'ctrl+a'
+                            ], timeout=5, check=True)
                             time.sleep(0.3)
-                            page.keyboard.press("Control+c")
+                            
+                            # Copy with Ctrl+C
+                            subprocess.run([
+                                'docker', 'exec', docker_name,
+                                'xdotool', 'key', 'ctrl+c'
+                            ], timeout=5, check=True)
                             time.sleep(0.5)
                             
-                            # Read clipboard using JavaScript
-                            # Note: This requires clipboard permissions
-                            final_url = page.evaluate("""
-                                async () => {
-                                    try {
-                                        return await navigator.clipboard.readText();
-                                    } catch (e) {
-                                        return null;
-                                    }
-                                }
-                            """)
+                            # Read clipboard using xclip inside the container
+                            result = subprocess.run([
+                                'docker', 'exec', docker_name,
+                                'xclip', '-selection', 'clipboard', '-o'
+                            ], capture_output=True, text=True, timeout=5, check=True)
+                            final_url = result.stdout.strip()
                             
                             print(f"[OAuth] URL from clipboard: {final_url}")
                             
@@ -301,6 +309,9 @@ class GoogleOAuthAutomator:
                             else:
                                 print("[OAuth] Failed to get URL with code from clipboard")
                                 return False
+                        except subprocess.TimeoutExpired:
+                            print("[OAuth] xdotool command timed out")
+                            return False
                         except Exception as e:
                             print(f"[OAuth] Error capturing URL: {e}")
                             return False
