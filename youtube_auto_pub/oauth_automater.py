@@ -239,7 +239,7 @@ class GoogleOAuthAutomator:
         max_attempts = 10
         for i in range(max_attempts):
             print(f"[OAuth] Page interaction loop {i+1}/{max_attempts}")
-            time.sleep(2) # Give page time to settle
+            time.sleep(10) # Give page time to settle
 
             # 1. Check for "Select all" checkbox (Consent Page)
             select_all = page.query_selector('input[aria-label="Select all"]')
