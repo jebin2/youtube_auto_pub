@@ -268,6 +268,7 @@ class GoogleOAuthAutomator:
                         found_redirect = False
                         while time.time() - start_time < 60:
                             current_url = page.url
+                            print(f"[OAuth] Current URL: {current_url}")
                             if "code=" in current_url or "localhost" in current_url:
                                 found_redirect = True
                                 break
