@@ -127,6 +127,11 @@ def process_auth_via_code(
     if not code:
         raise ValueError("Could not extract code from URL")
 
+    # Fetch token - suppress scope change warnings by setting include_granted_scopes
+    # Google may return additional scopes (like 'openid') that weren't originally requested
+    import os
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+    
     flow.fetch_token(code=code)
     creds = flow.credentials
 
