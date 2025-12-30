@@ -258,39 +258,51 @@ class GoogleOAuthAutomator:
                     if button.inner_text() == "Continue":
                         print("[OAuth] Clicking final Continue")
                         
-                        # Capture redirect URL using framenavigated event
-                        # This fires when frame navigates, even if navigation ultimately fails
-                        final_url = [None]
-                        
-                        def handle_frame_navigated(frame):
-                            url = frame.url
-                            print(f"[OAuth] Frame navigated to: {url}")
-                            if "localhost" in url and "code=" in url:
-                                final_url[0] = url
-                        
-                        page.on("framenavigated", handle_frame_navigated)
-                        
                         # Click the button which triggers the redirect
                         button.click(force=True)
                         
-                        # Wait for navigation to be captured
-                        print("[OAuth] Waiting for frame navigation...")
-                        start_time = time.time()
-                        while time.time() - start_time < 60:
-                            if final_url[0]:
-                                break
-                            time.sleep(1)
+                        # Wait for navigation to fail (shows error page)
+                        print("[OAuth] Waiting for redirect...")
+                        time.sleep(10)
                         
-                        page.remove_listener("framenavigated", handle_frame_navigated)
-                        
-                        if final_url[0]:
-                            print(f"[OAuth] Final URL captured: {final_url[0]}")
-                            with open(self.config.authorization_code_path, 'w') as f:
-                                f.write(final_url[0])
-                            print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
-                            return True
-                        else:
-                            print("[OAuth] Failed to capture final URL in time")
+                        # Use keyboard shortcuts to capture URL from address bar
+                        # Ctrl+L focuses address bar, Ctrl+A selects all, Ctrl+C copies
+                        # Then we can read clipboard
+                        try:
+                            # Focus address bar
+                            page.keyboard.press("Control+l")
+                            time.sleep(0.5)
+                            
+                            # Select all and copy
+                            page.keyboard.press("Control+a")
+                            time.sleep(0.3)
+                            page.keyboard.press("Control+c")
+                            time.sleep(0.5)
+                            
+                            # Read clipboard using JavaScript
+                            # Note: This requires clipboard permissions
+                            final_url = page.evaluate("""
+                                async () => {
+                                    try {
+                                        return await navigator.clipboard.readText();
+                                    } catch (e) {
+                                        return null;
+                                    }
+                                }
+                            """)
+                            
+                            print(f"[OAuth] URL from clipboard: {final_url}")
+                            
+                            if final_url and "code=" in final_url:
+                                with open(self.config.authorization_code_path, 'w') as f:
+                                    f.write(final_url)
+                                print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+                                return True
+                            else:
+                                print("[OAuth] Failed to get URL with code from clipboard")
+                                return False
+                        except Exception as e:
+                            print(f"[OAuth] Error capturing URL: {e}")
                             return False
             
             # 2. Check for "Continue" button (Intermediate Page)
