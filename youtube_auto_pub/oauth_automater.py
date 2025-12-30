@@ -243,6 +243,8 @@ class GoogleOAuthAutomator:
                 button.click(force=True)
                 time.sleep(2)
                 break
+
+        time.sleep(10)
         
         checkbox = page.query_selector('input[type="checkbox"]')
         if checkbox:
