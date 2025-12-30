@@ -85,9 +85,9 @@ def process_auth_via_code(
     )
 
     auth_url, _ = flow.authorization_url(
-        prompt='consent select_account',
+        access_type='offline',
+        prompt='consent',
         include_granted_scopes='true',
-        access_type='offline'
     )
     
     print(f"authorization_url####{auth_url}")
