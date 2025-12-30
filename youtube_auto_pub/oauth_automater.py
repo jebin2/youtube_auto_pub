@@ -249,15 +249,25 @@ class GoogleOAuthAutomator:
                 if not select_all.is_checked():
                      select_all.click(force=True)
                      time.sleep(2)
+                
+                # Now click Continue on this page to finish
+                continue_buttons = page.query_selector_all("button")
+                for button in continue_buttons:
+                    if button.inner_text() == "Continue":
+                        print("[OAuth] Clicking final Continue")
+                        button.click(force=True)
+                        return True
             
             # 2. Check for "Continue" button (Intermediate Page)
             found_continue = False
             continue_buttons = page.query_selector_all("button")
-            if button.inner_text() == "Continue":
-                print(f"[OAuth] Found intermediate Continue button")
-                button.click(force=True)
-                found_continue = True
-                time.sleep(2) # Wait for navigation
+            for button in continue_buttons:
+                if button.inner_text() == "Continue":
+                    print(f"[OAuth] Found intermediate Continue button")
+                    button.click(force=True)
+                    found_continue = True
+                    time.sleep(2) # Wait for navigation
+                    break
             
             if found_continue:
                 continue
