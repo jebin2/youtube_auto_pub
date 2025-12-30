@@ -261,27 +261,42 @@ class GoogleOAuthAutomator:
                         time.sleep(5) # Wait for navigation
                         
                         # Wait for redirect and capture code
+                        # Wait for redirect and capture code
                         print("[OAuth] Waiting for redirect to capture code...")
                         
-                        # Poll for URL change (up to 60 seconds)
-                        start_time = time.time()
-                        found_redirect = False
-                        while time.time() - start_time < 60:
-                            current_url = page.url
-                            print(f"[OAuth] Current URL: {current_url}")
-                            if "code=" in current_url or "localhost" in current_url:
-                                found_redirect = True
-                                break
-                            time.sleep(1)
-                            
-                        final_url = page.url
-                        print(f"[OAuth] Final URL captured: {final_url}")
+                        # Use request interception to capture the URL even if navigation fails
+                        final_url = [None]
+                        def handle_request(request):
+                            if "code=" in request.url and "localhost" in request.url:
+                                print(f"[OAuth] Intercepted request to: {request.url}")
+                                final_url[0] = request.url
+
+                        page.on("request", handle_request)
                         
-                        # Write code/url to file
-                        with open(self.config.authorization_code_path, 'w') as f:
-                            f.write(final_url)
-                        print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
-                        return True
+                        # Wait for the request to happen
+                        start_time = time.time()
+                        while time.time() - start_time < 60:
+                            if final_url[0]:
+                                break
+                            
+                            # Check page.url as fallback
+                            if "code=" in page.url or "localhost" in page.url:
+                                final_url[0] = page.url
+                                break
+                                
+                            time.sleep(1)
+
+                        page.remove_listener("request", handle_request)
+                        
+                        if final_url[0]:
+                            print(f"[OAuth] Final URL captured: {final_url[0]}")
+                            with open(self.config.authorization_code_path, 'w') as f:
+                                f.write(final_url[0])
+                            print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+                            return True
+                        else:
+                            print("[OAuth] Failed to capture final URL in time")
+                            return False
             
             # 2. Check for "Continue" button (Intermediate Page)
             found_continue = False
