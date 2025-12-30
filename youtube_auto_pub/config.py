@@ -7,7 +7,7 @@ and environment-specific settings.
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 
 @dataclass
@@ -51,6 +51,7 @@ class YouTubeConfig:
     host_network: bool = True
     google_email: Optional[str] = None
     google_password: Optional[str] = None
+    allowed_emails: List[str] = field(default_factory=list)  # Empty list = allow all
     
     def __post_init__(self):
         """Compute derived values after initialization."""
@@ -62,5 +63,6 @@ class YouTubeConfig:
 YOUTUBE_SCOPES = [
     'https://www.googleapis.com/auth/youtube.upload',
     'https://www.googleapis.com/auth/youtube',
-    'https://www.googleapis.com/auth/youtube.force-ssl'
+    'https://www.googleapis.com/auth/youtube.force-ssl',
+    'https://www.googleapis.com/auth/userinfo.email'  # Required for allowed_emails validation
 ]
