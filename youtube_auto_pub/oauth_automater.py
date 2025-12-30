@@ -258,6 +258,7 @@ class GoogleOAuthAutomator:
                     if button.inner_text() == "Continue":
                         print("[OAuth] Clicking final Continue")
                         button.click(force=True)
+                        time.sleep(5) # Wait for navigation
                         return True
             
             # 2. Check for "Continue" button (Intermediate Page)
