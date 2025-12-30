@@ -48,7 +48,7 @@ class YouTubeConfig:
     hf_token: Optional[str] = None
     encryption_key: Union[str, bytes, None] = None
     docker_name: str = "youtube_auto_pub"
-    host_network: bool = True
+    host_network: bool = False
     google_email: Optional[str] = None
     google_password: Optional[str] = None
     allowed_emails: List[str] = field(default_factory=list)  # Empty list = allow all
