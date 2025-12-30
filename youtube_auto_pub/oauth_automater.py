@@ -257,78 +257,39 @@ class GoogleOAuthAutomator:
                 for button in continue_buttons:
                     if button.inner_text() == "Continue":
                         print("[OAuth] Clicking final Continue")
-                        
-                        # Click the button which triggers the redirect
                         button.click(force=True)
-                        
-                        # Wait for navigation to fail (shows error page)
-                        print("[OAuth] Waiting for redirect...")
                         time.sleep(10)
                         
-                        # Use xdotool via docker exec to capture URL from address bar
-                        # This works at X11 level inside the container
-                        import subprocess
-                        docker_name = self.config.docker_name
-                        
-                        try:
-                            # Focus address bar with Ctrl+L
-                            subprocess.run([
-                                'docker', 'exec', docker_name,
-                                'xdotool', 'key', 'ctrl+l'
-                            ], timeout=5, check=True)
-                            time.sleep(0.5)
-                            
-                            # Select all with Ctrl+A
-                            subprocess.run([
-                                'docker', 'exec', docker_name,
-                                'xdotool', 'key', 'ctrl+a'
-                            ], timeout=5, check=True)
-                            time.sleep(0.3)
-                            
-                            # Copy with Ctrl+C
-                            subprocess.run([
-                                'docker', 'exec', docker_name,
-                                'xdotool', 'key', 'ctrl+c'
-                            ], timeout=5, check=True)
-                            time.sleep(0.5)
-                            
-                            # Read clipboard using xclip inside the container
-                            result = subprocess.run([
-                                'docker', 'exec', docker_name,
-                                'xclip', '-selection', 'clipboard', '-o'
-                            ], capture_output=True, text=True, timeout=5, check=True)
-                            final_url = result.stdout.strip()
-                            
-                            print(f"[OAuth] URL from clipboard: {final_url}")
-                            
-                            if final_url and "code=" in final_url:
-                                with open(self.config.authorization_code_path, 'w') as f:
-                                    f.write(final_url)
-                                print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
-                                return True
-                            else:
-                                print("[OAuth] Failed to get URL with code from clipboard")
-                                return False
-                        except subprocess.TimeoutExpired:
-                            print("[OAuth] xdotool command timed out")
-                            return False
-                        except Exception as e:
-                            print(f"[OAuth] Error capturing URL: {e}")
+                        # Capture URL from address bar
+                        captured_url = self._capture_url_from_address_bar()
+                        if captured_url and "code=" in captured_url:
+                            with open(self.config.authorization_code_path, 'w') as f:
+                                f.write(captured_url)
+                            print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+                            return True
+                        else:
+                            print("[OAuth] Failed to get URL with code from clipboard")
                             return False
             
-            # 2. Check for "Continue" button (Intermediate Page)
-            found_continue = False
+            # 2. Check for "Continue" button (Intermediate or Final Page without checkbox)
             continue_buttons = page.query_selector_all("button")
             for button in continue_buttons:
                 if button.inner_text() == "Continue":
-                    print(f"[OAuth] Found intermediate Continue button")
+                    print(f"[OAuth] Found Continue button")
                     button.click(force=True)
-                    found_continue = True
-                    time.sleep(2) # Wait for navigation
+                    time.sleep(5)
+                    
+                    # Check if this led to the redirect
+                    captured_url = self._capture_url_from_address_bar()
+                    if captured_url and "code=" in captured_url:
+                        with open(self.config.authorization_code_path, 'w') as f:
+                            f.write(captured_url)
+                        print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+                        return True
+                    
+                    # Otherwise continue loop (was intermediate page)
+                    print("[OAuth] Not final redirect, continuing...")
                     break
-            
-            if found_continue:
-                continue
 
             # If neither found, wait and retry
             print("[OAuth] No actionable elements found, waiting...")
@@ -336,3 +297,56 @@ class GoogleOAuthAutomator:
             
         print("[OAuth] Failed to complete OAuth flow within limit")
         return False
+
+    def _capture_url_from_address_bar(self) -> str:
+        """Capture URL from browser address bar using xdotool and xclip.
+        
+        Uses docker exec to run xdotool commands inside the Neko container
+        to focus address bar, select all, copy, and read clipboard.
+        
+        Returns:
+            The captured URL string, or None if capture failed
+        """
+        import subprocess
+        import time
+        
+        docker_name = self.config.docker_name
+        
+        try:
+            # Focus address bar with Ctrl+L
+            subprocess.run([
+                'docker', 'exec', docker_name,
+                'xdotool', 'key', 'ctrl+l'
+            ], timeout=5, check=True)
+            time.sleep(0.5)
+            
+            # Select all with Ctrl+A
+            subprocess.run([
+                'docker', 'exec', docker_name,
+                'xdotool', 'key', 'ctrl+a'
+            ], timeout=5, check=True)
+            time.sleep(0.3)
+            
+            # Copy with Ctrl+C
+            subprocess.run([
+                'docker', 'exec', docker_name,
+                'xdotool', 'key', 'ctrl+c'
+            ], timeout=5, check=True)
+            time.sleep(0.5)
+            
+            # Read clipboard using xclip inside the container
+            result = subprocess.run([
+                'docker', 'exec', docker_name,
+                'xclip', '-selection', 'clipboard', '-o'
+            ], capture_output=True, text=True, timeout=5, check=True)
+            url = result.stdout.strip()
+            
+            print(f"[OAuth] URL from clipboard: {url}")
+            return url
+            
+        except subprocess.TimeoutExpired:
+            print("[OAuth] xdotool command timed out")
+            return None
+        except Exception as e:
+            print(f"[OAuth] Error capturing URL: {e}")
+            return None
