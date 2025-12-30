@@ -115,6 +115,10 @@ def process_auth_via_code(
     if not code:
         raise ValueError("No authorization code received")
 
+    # Clean up URL (handle encoded entities if read from file/logs)
+    import html
+    code = html.unescape(code)
+
     # Parse code from URL
     parsed_url = urlparse(code)
     query_params = parse_qs(parsed_url.query)
