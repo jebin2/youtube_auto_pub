@@ -12,6 +12,7 @@ import json
 import time
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any
@@ -354,7 +355,7 @@ class YouTubeUploader:
         else:
             # GUI mode - use subprocess + browser automation
             process = subprocess.Popen(
-                ['python', '-u', '-m', 'youtube_auto_pub.auth_worker', 
+                [sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
                  '-c', client_path, '-t', token_path, '-s', ','.join(scopes)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
