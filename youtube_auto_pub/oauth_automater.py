@@ -246,24 +246,12 @@ class GoogleOAuthAutomator:
 
         time.sleep(10)
         
-        try:
-            print("[OAuth] Waiting for checkbox...")
-            checkbox_selector = 'input[type="checkbox"]'
-            page.wait_for_selector(checkbox_selector, timeout=5000)
-            checkbox = page.query_selector(checkbox_selector)
-            if checkbox:
-                checkbox.check()
-        except Exception:
-            print("[OAuth] Checkbox not found within timeout, continuing...")
-
-        time.sleep(5)
-        
         continue_buttons = page.query_selector_all("button")
         for button in continue_buttons:
             button_text = button.inner_text()
             if button_text == "Continue":
                 print(f"[OAuth] Found Continue button")
-                time.sleep(2)
+                time.sleep(10)
                 
                 # Check for "Select all" checkbox
                 select_all = page.query_selector('input[aria-label="Select all"]')
