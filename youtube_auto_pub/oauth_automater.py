@@ -262,13 +262,14 @@ class GoogleOAuthAutomator:
                         # Register BEFORE clicking to ensure we catch it
                         final_url = [None]
                         def handle_request(request):
+                            print(f"[OAuth] Intercepted request to: {request.url}")
                             if "code=" in request.url and "localhost" in request.url:
                                 print(f"[OAuth] Intercepted request to: {request.url}")
                                 final_url[0] = request.url
 
                         page.on("request", handle_request)
                         
-                        # Click the button which triggers the redirect
+                        # Click the button which triggers the r1edirect
                         button.click(force=True)
                         time.sleep(5) # Wait for navigation attempt
                         
