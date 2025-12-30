@@ -354,9 +354,15 @@ class YouTubeUploader:
             return Credentials.from_authorized_user_file(token_path, scopes)
         else:
             # GUI mode - use subprocess + browser automation
+            cmd = [sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
+                   '-c', client_path, '-t', token_path, '-s', ','.join(scopes)]
+            
+            # Use file-mode if we suspect network isolation (e.g. Docker)
+            if self.config.is_docker or True: # Force file mode for better stability in remote envs
+                 cmd.append('--file-mode')
+                 
             process = subprocess.Popen(
-                [sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
-                 '-c', client_path, '-t', token_path, '-s', ','.join(scopes)],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,

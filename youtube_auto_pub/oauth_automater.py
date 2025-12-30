@@ -259,7 +259,31 @@ class GoogleOAuthAutomator:
                         print("[OAuth] Clicking final Continue")
                         button.click(force=True)
                         time.sleep(5) # Wait for navigation
-                        return True
+                        
+                        # Wait for redirect and capture code
+                        print("[OAuth] Waiting for redirect to capture code...")
+                        # Wait for URL to contain 'code=' or match generic localhost expectation
+                        try:
+                            # We expect a redirect to http://localhost/?state=...&code=...&scope=...
+                            # But wait_for_url might timeout if network is blocked, so we check URL manually too
+                            # page.wait_for_url("**/localhost/**", timeout=15000) 
+                            
+                            # Just wait a bit and grab URL
+                            time.sleep(5)
+                            final_url = page.url
+                            print(f"[OAuth] Final URL captured: {final_url}")
+                            
+                            # Write code/url to file
+                            with open(self.config.authorization_code_path, 'w') as f:
+                                f.write(final_url)
+                            print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+                            return True
+                        except Exception as e:
+                            print(f"[OAuth] Failed to capture final URL: {e}")
+                            # Fallback: capture whatever URL we are on
+                            with open(self.config.authorization_code_path, 'w') as f:
+                                f.write(page.url)
+                            return True
             
             # 2. Check for "Continue" button (Intermediate Page)
             found_continue = False

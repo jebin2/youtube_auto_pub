@@ -162,17 +162,28 @@ if __name__ == "__main__":
         required=True,
         help="Comma-separated list of OAuth scopes"
     )
-    
+
     parser.add_argument(
         "--prompt", "-p",
         action="store_true",
         help="Prompt for code input instead of waiting for file"
+    )
+    
+    parser.add_argument(
+        "--file-mode", "-f",
+        action="store_true",
+        help="Use file-based auth exchange instead of local server"
     )
 
     args = parser.parse_args()
     scopes = args.scopes.split(",")
     
     if args.prompt:
+        # Interactive prompt for code
         process_auth_via_code(args.client, args.token, scopes, prompt=True)
+    elif args.file_mode:
+        # File-based wait for code (no prompt)
+        process_auth_via_code(args.client, args.token, scopes, prompt=False)
     else:
+        # Default local server (browser callback)
         process_auth(args.client, args.token, scopes)
