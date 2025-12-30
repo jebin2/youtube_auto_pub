@@ -8,6 +8,7 @@ Provides a clean, configurable interface for:
 """
 
 import os
+import json
 import time
 import subprocess
 from dataclasses import dataclass, field
@@ -88,6 +89,55 @@ class YouTubeUploader:
         self.token_manager = TokenManager(self.config)
         self._services: dict = {}
 
+    def _extract_client_id(self, client_path: str) -> Optional[str]:
+        """Extract the client_id from a client_secrets.json file.
+        
+        Args:
+            client_path: Path to client_secrets.json file
+            
+        Returns:
+            The client_id string, or None if not found
+        """
+        try:
+            if not os.path.exists(client_path):
+                return None
+            with open(client_path, 'r') as f:
+                data = json.load(f)
+            # Handle both "installed" and "web" client types
+            for key in ['installed', 'web']:
+                if key in data and 'client_id' in data[key]:
+                    return data[key]['client_id']
+            return None
+        except Exception as e:
+            print(f"[Uploader] Error extracting client_id: {e}")
+            return None
+
+    def _is_token_for_client(self, token_path: str, client_id: str) -> bool:
+        """Check if the token was created for the given client_id.
+        
+        Args:
+            token_path: Path to token.json file
+            client_id: The expected client_id
+            
+        Returns:
+            True if the token matches the client_id, False otherwise
+        """
+        try:
+            if not os.path.exists(token_path):
+                return True  # No token exists, so it's fine
+            with open(token_path, 'r') as f:
+                data = json.load(f)
+            token_client_id = data.get('client_id')
+            if token_client_id is None:
+                # Old token format might not have client_id, assume it's invalid
+                print("[Uploader] Token missing client_id field, will re-authenticate.")
+                return False
+            return token_client_id == client_id
+        except Exception as e:
+            print(f"[Uploader] Error checking token client_id: {e}")
+            return False
+
+
     def get_service(
         self,
         token_path: str,
@@ -124,6 +174,18 @@ class YouTubeUploader:
         # Download and decrypt credential files
         local_token_path = self.token_manager.download_and_decrypt(token_path)
         local_client_path = self.token_manager.download_and_decrypt(client_path)
+        
+        # Validate that token was created for the current client
+        current_client_id = self._extract_client_id(local_client_path)
+        if current_client_id:
+            if not self._is_token_for_client(local_token_path, current_client_id):
+                print("[Uploader] ⚠ Client secret has changed. Deleting old token to force re-authentication.")
+                try:
+                    if os.path.exists(local_token_path):
+                        os.remove(local_token_path)
+                        print(f"[Uploader] Deleted stale token: {local_token_path}")
+                except Exception as e:
+                    print(f"[Uploader] Error deleting token: {e}")
         
         creds = None
         
