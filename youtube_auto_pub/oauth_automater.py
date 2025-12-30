@@ -258,33 +258,30 @@ class GoogleOAuthAutomator:
                     if button.inner_text() == "Continue":
                         print("[OAuth] Clicking final Continue")
                         
-                        # Capture redirect URL from response headers BEFORE browser attempts navigation
-                        # Google sends 302 redirect with Location header pointing to localhost
+                        # Capture redirect URL using framenavigated event
+                        # This fires when frame navigates, even if navigation ultimately fails
                         final_url = [None]
                         
-                        def handle_response(response):
-                            # Look for redirect responses
-                            if response.status in [301, 302, 303, 307, 308]:
-                                headers = response.headers
-                                location = headers.get('location', '')
-                                print(f"[OAuth] Redirect response: {response.status} -> {location}")
-                                if "localhost" in location and "code=" in location:
-                                    final_url[0] = location
+                        def handle_frame_navigated(frame):
+                            url = frame.url
+                            print(f"[OAuth] Frame navigated to: {url}")
+                            if "localhost" in url and "code=" in url:
+                                final_url[0] = url
                         
-                        page.on("response", handle_response)
+                        page.on("framenavigated", handle_frame_navigated)
                         
                         # Click the button which triggers the redirect
                         button.click(force=True)
                         
-                        # Wait for redirect response to be captured
-                        print("[OAuth] Waiting for redirect response...")
+                        # Wait for navigation to be captured
+                        print("[OAuth] Waiting for frame navigation...")
                         start_time = time.time()
                         while time.time() - start_time < 60:
                             if final_url[0]:
                                 break
                             time.sleep(1)
                         
-                        page.remove_listener("response", handle_response)
+                        page.remove_listener("framenavigated", handle_frame_navigated)
                         
                         if final_url[0]:
                             print(f"[OAuth] Final URL captured: {final_url[0]}")
