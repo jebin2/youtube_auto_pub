@@ -234,34 +234,47 @@ class GoogleOAuthAutomator:
                             break
                 break
 
-        # Handle Continue buttons
-        continue_buttons = page.query_selector_all("button")
-        for button in continue_buttons:
-            button_text = button.inner_text()
-            if button_text == "Continue":
-                print(f"[OAuth] Found Continue button")
-                button.click(force=True)
-                time.sleep(2)
-                break
+        # Handle sequence of Continue screens and Consent screen
+        # We loop to handle variable number of "Continue" intermediate pages
+        max_attempts = 10
+        for i in range(max_attempts):
+            print(f"[OAuth] Page interaction loop {i+1}/{max_attempts}")
+            time.sleep(2) # Give page time to settle
 
-        time.sleep(10)
-        
-        continue_buttons = page.query_selector_all("button")
-        for button in continue_buttons:
-            button_text = button.inner_text()
-            if button_text == "Continue":
-                print(f"[OAuth] Found Continue button")
-                time.sleep(10)
+            # 1. Check for "Select all" checkbox (Consent Page)
+            select_all = page.query_selector('input[aria-label="Select all"]')
+            if select_all:
+                print("[OAuth] Found 'Select all' checkbox")
+                # Ensure it is checked
+                if not select_all.is_checked():
+                     select_all.click(force=True)
+                     time.sleep(1)
                 
-                # Check for "Select all" checkbox
-                select_all = page.query_selector('input[aria-label="Select all"]')
-                if select_all:
-                    print("[OAuth] Clicking Select all checkbox")
-                    select_all.click(force=True)
-                    time.sleep(2)
+                # Now click Continue on this page to finish
+                continue_buttons = page.query_selector_all("button")
+                for button in continue_buttons:
+                    if button.inner_text() == "Continue":
+                        print("[OAuth] Clicking final Continue")
+                        button.click(force=True)
+                        return True
+            
+            # 2. Check for "Continue" button (Intermediate Page)
+            found_continue = False
+            continue_buttons = page.query_selector_all("button")
+            for button in continue_buttons:
+                if button.inner_text() == "Continue":
+                    print(f"[OAuth] Found intermediate Continue button")
+                    button.click(force=True)
+                    found_continue = True
+                    time.sleep(2) # Wait for navigation
+                    break
+            
+            if found_continue:
+                continue
 
-                button.click(force=True)
-                time.sleep(2)
-                return True
-
+            # If neither found, wait and retry
+            print("[OAuth] No actionable elements found, waiting...")
+            time.sleep(2)
+            
+        print("[OAuth] Failed to complete OAuth flow within limit")
         return False
