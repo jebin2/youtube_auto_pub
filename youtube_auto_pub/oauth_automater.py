@@ -307,19 +307,39 @@ class GoogleOAuthAutomator:
         return False
 
     def _capture_url_from_address_bar(self) -> str:
-        """Capture URL from browser address bar using xdotool and xclip.
+        """Capture URL from browser using Chrome DevTools Protocol.
         
-        Uses docker exec to run xdotool commands inside the Neko container
-        to focus address bar, select all, copy, and read clipboard.
+        Uses CDP endpoint to get the current page URL, which is more reliable
+        than clipboard-based methods in Docker containers.
         
         Returns:
             The captured URL string, or None if capture failed
         """
         import subprocess
         import time
+        import json
         
         docker_name = self.config.docker_name
+        cdp_port = getattr(self.config, 'cdp_port', 9224)  # Default to 9224
         
+        # Method 1: Chrome DevTools Protocol (preferred - most reliable)
+        try:
+            import urllib.request
+            cdp_url = f"http://localhost:{cdp_port}/json"
+            with urllib.request.urlopen(cdp_url, timeout=5) as response:
+                pages = json.loads(response.read().decode())
+                if pages:
+                    # Get URL from the first page
+                    url = pages[0].get('url', '')
+                    if url and not url.startswith('chrome://') and not url.startswith('chrome-error://'):
+                        print(f"[OAuth] URL from CDP: {url}")
+                        return url
+                    else:
+                        print(f"[OAuth] CDP returned non-useful URL: {url}")
+        except Exception as e:
+            print(f"[OAuth] CDP method failed: {e}")
+        
+        # Method 2: xdotool + xclip fallback
         try:
             # Focus address bar with Ctrl+L
             subprocess.run([
@@ -346,11 +366,15 @@ class GoogleOAuthAutomator:
             result = subprocess.run([
                 'docker', 'exec', docker_name,
                 'xclip', '-selection', 'clipboard', '-o'
-            ], capture_output=True, text=True, timeout=5, check=True)
-            url = result.stdout.strip()
+            ], capture_output=True, text=True, timeout=5)
             
-            print(f"[OAuth] URL from clipboard: {url}")
-            return url
+            if result.returncode == 0 and result.stdout.strip():
+                url = result.stdout.strip()
+                print(f"[OAuth] URL from clipboard: {url}")
+                return url
+            else:
+                print(f"[OAuth] xclip failed or empty: {result.stderr}")
+                return None
             
         except subprocess.TimeoutExpired:
             print("[OAuth] xdotool command timed out")
