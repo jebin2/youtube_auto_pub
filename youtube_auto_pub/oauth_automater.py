@@ -59,6 +59,7 @@ class GoogleOAuthAutomator:
         self.password = password or self.config.google_password
         self.auth_code = None
         self.callback_url = None
+        self.browser_config = None  # Will be set during authorize_oauth
         
     def get_credentials(self) -> Tuple[str, str]:
         """Get email and password using two-tier approach.
@@ -124,6 +125,7 @@ class GoogleOAuthAutomator:
             browser_config.headless = False
             browser_config.user_data_dir = self.config.browser_profile_path
             browser_config.host_network = self.config.host_network
+            self.browser_config = browser_config  # Store for use in _capture_url_from_address_bar
             
             with BrowserManager(browser_config) as page:
                 page.wait_for_timeout(2000)
@@ -320,7 +322,10 @@ class GoogleOAuthAutomator:
         import json
         
         docker_name = self.config.docker_name
-        cdp_port = getattr(self.config, 'cdp_port', 9224)  # Default to 9224
+        # Get CDP port from browser_config if available, otherwise use default
+        cdp_port = 9224  # Default fallback
+        if self.browser_config is not None:
+            cdp_port = self.browser_config.debug_port
         
         # Method 1: Chrome DevTools Protocol (preferred - most reliable)
         try:
