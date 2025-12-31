@@ -183,13 +183,19 @@ class YouTubeUploader:
         # Look for client secret in multiple locations:
         # 1. Current working directory
         # 2. Config's project_path (if set)
-        # 3. Absolute path if provided
+        # 3. /app directory (Docker mounted files)
+        # 4. Absolute path if provided
         possible_local_paths = [client_path]
         
         # Add project_path based location if config has it
         if hasattr(self.config, 'project_path') and self.config.project_path:
             project_client_path = os.path.join(self.config.project_path, client_path)
             possible_local_paths.append(project_client_path)
+        
+        # Check /app directory for Docker mounted files
+        app_client_path = os.path.join('/app', client_path)
+        if app_client_path not in possible_local_paths:
+            possible_local_paths.append(app_client_path)
         
         # Also check encrypt_path for the original file
         if self.config.encrypt_path:
