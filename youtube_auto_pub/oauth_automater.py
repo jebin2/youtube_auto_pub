@@ -294,6 +294,14 @@ class GoogleOAuthAutomator:
             # If neither found, wait and retry
             print("[OAuth] No actionable elements found, waiting...")
             time.sleep(2)
+
+            # Check if this led to the redirect
+            captured_url = self._capture_url_from_address_bar()
+            if captured_url and "code=" in captured_url:
+                with open(self.config.authorization_code_path, 'w') as f:
+                    f.write(captured_url)
+                print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+                return True
             
         print("[OAuth] Failed to complete OAuth flow within limit")
         return False
