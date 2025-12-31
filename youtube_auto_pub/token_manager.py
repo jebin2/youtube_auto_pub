@@ -50,11 +50,10 @@ class TokenManager:
         """
         self.config = config or YouTubeConfig()
         
-        # Clean up existing encrypt directory
-        if self._dir_exists(self.config.encrypt_path):
-            self._remove_directory(self.config.encrypt_path)
-        
+        # Clean up existing encrypt directory by emptying it
+        # (Preserves the directory itself which might be a mount point)
         self._create_directory(self.config.encrypt_path)
+        self._empty_directory(self.config.encrypt_path)
         
         if not self.config.encryption_key:
             raise ValueError("encryption_key is required in config or ENCRYPT_KEY env var")
@@ -149,6 +148,24 @@ class TokenManager:
             os.makedirs(path, exist_ok=True)
         except Exception as e:
             print(f"[TokenManager] Error creating directory {path}: {e}")
+
+    @staticmethod
+    def _empty_directory(path: str) -> None:
+        """Empty a directory but do not remove the directory itself."""
+        try:
+            if not os.path.isdir(path):
+                return
+            for item in os.listdir(path):
+                item_path = os.path.join(path, item)
+                try:
+                    if os.path.isfile(item_path) or os.path.islink(item_path):
+                        os.remove(item_path)
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                except Exception as e:
+                    print(f"[TokenManager] Warning: Failed to delete item {item_path}: {e}")
+        except Exception as e:
+            print(f"[TokenManager] Warning: Failed to empty directory {path}: {e}")
 
 
 if __name__ == "__main__":
