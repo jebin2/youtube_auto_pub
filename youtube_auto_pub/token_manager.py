@@ -50,9 +50,10 @@ class TokenManager:
         """
         self.config = config or YouTubeConfig()
         
-        # Ensure encrypt directory exists
-        # NOTE: Do NOT clear/delete the directory - files may have been created by
-        # external processes (e.g., SSH reauth from host) that we need to use
+        # Clean up existing encrypt directory
+        if self._dir_exists(self.config.encrypt_path):
+            self._remove_directory(self.config.encrypt_path)
+        
         self._create_directory(self.config.encrypt_path)
         
         if not self.config.encryption_key:
