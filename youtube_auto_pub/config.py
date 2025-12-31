@@ -53,7 +53,14 @@ class YouTubeConfig:
     google_email: Optional[str] = None
     google_password: Optional[str] = None
     project_path: Optional[str] = None
-
+    client_secret_path: str = None
+    token_path: str = None
+    scopes: List[str] = field(default_factory=lambda: [
+        'https://www.googleapis.com/auth/youtube.upload',
+        'https://www.googleapis.com/auth/youtube',
+        'https://www.googleapis.com/auth/youtube.force-ssl',
+        'https://www.googleapis.com/auth/userinfo.email'
+    ])
     
     def __post_init__(self):
         """Compute derived values after initialization."""

@@ -22,7 +22,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
 
-from youtube_auto_pub.config import YouTubeConfig, YOUTUBE_SCOPES
+from youtube_auto_pub.config import YouTubeConfig
 from youtube_auto_pub.token_manager import TokenManager
 
 
@@ -144,9 +144,6 @@ class YouTubeUploader:
 
     def get_service(
         self,
-        token_path: str,
-        client_path: str,
-        scopes: Optional[List[str]] = None,
         cache_key: Optional[str] = None
     ) -> Any:
         """Get an authenticated YouTube API service.
@@ -158,15 +155,14 @@ class YouTubeUploader:
         4. Returns an authenticated YouTube service
         
         Args:
-            token_path: Filename of the token file (will be downloaded)
-            client_path: Filename of the client secrets file (will be downloaded)
-            scopes: OAuth scopes (defaults to YOUTUBE_SCOPES)
             cache_key: Optional key to cache the service for reuse
             
         Returns:
             Authenticated YouTube API service object
         """
-        scopes = scopes or YOUTUBE_SCOPES
+        scopes = self.config.scopes
+        token_path = self.config.token_path
+        client_path = self.config.client_secret_path
         
         # Return cached service if available
         if cache_key and cache_key in self._services:
