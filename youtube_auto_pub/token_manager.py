@@ -50,11 +50,11 @@ class TokenManager:
         """
         self.config = config or YouTubeConfig()
         
-        # Clean up existing encrypt directory
+        # Clear existing encrypt directory contents (but keep directory - may be a volume mount)
         if self._dir_exists(self.config.encrypt_path):
-            self._remove_directory(self.config.encrypt_path)
-        
-        self._create_directory(self.config.encrypt_path)
+            self._clear_directory_contents(self.config.encrypt_path)
+        else:
+            self._create_directory(self.config.encrypt_path)
         
         if not self.config.encryption_key:
             raise ValueError("encryption_key is required in config or ENCRYPT_KEY env var")
@@ -141,6 +141,21 @@ class TokenManager:
                 shutil.rmtree(path)
         except Exception as e:
             print(f"[TokenManager] Warning: Failed to delete {path}: {e}")
+
+    @staticmethod
+    def _clear_directory_contents(path: str) -> None:
+        """Clear contents of directory without removing the directory itself.
+        
+        This is safe for Docker volume mounts where the directory cannot be removed.
+        """
+        try:
+            for item in Path(path).iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+        except Exception as e:
+            print(f"[TokenManager] Warning: Failed to clear contents of {path}: {e}")
 
     @staticmethod
     def _create_directory(path: str) -> None:
