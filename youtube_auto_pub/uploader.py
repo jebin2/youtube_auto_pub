@@ -180,27 +180,50 @@ class YouTubeUploader:
         local_client_path = self.token_manager.download_and_decrypt(client_path)
         
         # Check for local client secrets override/update
-        # If the user has provided a path that exists locally and differs from the stored one
-        if os.path.exists(client_path) and os.path.abspath(client_path) != os.path.abspath(local_client_path):
-            local_id = self._extract_client_id(client_path)
-            stored_id = self._extract_client_id(local_client_path)
-            
-            if local_id and local_id != stored_id:
-                print(f"[Uploader] 🔄 Detected local client secret update in '{client_path}'.")
-                print(f"[Uploader] New Client ID: ...{local_id[-10:] if local_id else 'None'}")
-                print(f"[Uploader] Old Client ID: ...{stored_id[-10:] if stored_id else 'None'}")
-                print("[Uploader] Overwriting cached secret and forcing re-authentication.")
+        # Look for client secret in multiple locations:
+        # 1. Current working directory
+        # 2. Config's project_path (if set)
+        # 3. Absolute path if provided
+        possible_local_paths = [client_path]
+        
+        # Add project_path based location if config has it
+        if hasattr(self.config, 'project_path') and self.config.project_path:
+            project_client_path = os.path.join(self.config.project_path, client_path)
+            possible_local_paths.append(project_client_path)
+        
+        # Also check encrypt_path for the original file
+        if self.config.encrypt_path:
+            encrypt_client_path = os.path.join(self.config.encrypt_path, client_path)
+            if encrypt_client_path != local_client_path:
+                possible_local_paths.append(encrypt_client_path)
+        
+        # Try each possible location
+        stored_id = self._extract_client_id(local_client_path)
+        
+        for check_path in possible_local_paths:
+            if os.path.exists(check_path) and os.path.abspath(check_path) != os.path.abspath(local_client_path):
+                local_id = self._extract_client_id(check_path)
                 
-                try:
-                    # Overwrite the stored/decrypted file with the local one
-                    shutil.copy(client_path, local_client_path)
+                if local_id and stored_id and local_id != stored_id:
+                    print(f"[Uploader] 🔄 Detected local client secret update in '{check_path}'.")
+                    print(f"[Uploader] New Client ID: ...{local_id[-10:] if local_id else 'None'}")
+                    print(f"[Uploader] Old Client ID: ...{stored_id[-10:] if stored_id else 'None'}")
+                    print("[Uploader] Overwriting cached secret and forcing re-authentication.")
                     
-                    # Delete existing token to force re-auth
-                    if os.path.exists(local_token_path):
-                        os.remove(local_token_path)
-                        print(f"[Uploader] Deleted stale token: {local_token_path}")
-                except Exception as e:
-                    print(f"[Uploader] Error updating local client secret: {e}")
+                    try:
+                        # Overwrite the stored/decrypted file with the local one
+                        shutil.copy(check_path, local_client_path)
+                        
+                        # Delete existing token to force re-auth
+                        if os.path.exists(local_token_path):
+                            os.remove(local_token_path)
+                            print(f"[Uploader] Deleted stale token: {local_token_path}")
+                        
+                        # Update stored_id for subsequent checks
+                        stored_id = local_id
+                        break  # Found and applied update, stop checking
+                    except Exception as e:
+                        print(f"[Uploader] Error updating local client secret: {e}")
         
         # Validate that token was created for the current client
         current_client_id = self._extract_client_id(local_client_path)

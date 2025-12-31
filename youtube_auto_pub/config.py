@@ -31,6 +31,7 @@ class YouTubeConfig:
         encryption_key: Fernet encryption key for credentials
         docker_name: Name for Docker container (used by browser_manager)
         host_network: Whether to use host network in Docker
+        project_path: Project root path for finding local client secrets
     """
     encrypt_path: str = "./encrypt"
     authorization_code_path: str = "./code.txt"
@@ -51,6 +52,7 @@ class YouTubeConfig:
     host_network: bool = False
     google_email: Optional[str] = None
     google_password: Optional[str] = None
+    project_path: Optional[str] = None  # Project root for finding local client secrets
 
     
     def __post_init__(self):
