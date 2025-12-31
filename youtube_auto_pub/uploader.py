@@ -223,6 +223,8 @@ class YouTubeUploader:
                         print("[Uploader] Overwriting cached secret and forcing re-authentication.")
                     
                     try:
+                        # Ensure destination directory exists
+                        os.makedirs(os.path.dirname(local_client_path), exist_ok=True)
                         # Overwrite the stored/decrypted file with the local one
                         shutil.copy(check_path, local_client_path)
                         
