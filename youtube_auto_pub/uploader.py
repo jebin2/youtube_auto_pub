@@ -210,18 +210,24 @@ class YouTubeUploader:
             if os.path.exists(check_path) and os.path.abspath(check_path) != os.path.abspath(local_client_path):
                 local_id = self._extract_client_id(check_path)
                 
-                if local_id and stored_id and local_id != stored_id:
-                    print(f"[Uploader] 🔄 Detected local client secret update in '{check_path}'.")
-                    print(f"[Uploader] New Client ID: ...{local_id[-10:] if local_id else 'None'}")
-                    print(f"[Uploader] Old Client ID: ...{stored_id[-10:] if stored_id else 'None'}")
-                    print("[Uploader] Overwriting cached secret and forcing re-authentication.")
+                # Copy local client secret if:
+                # 1. No stored file exists (fresh start - stored_id is None), OR
+                # 2. Client ID has changed (need re-auth)
+                if local_id and (stored_id is None or local_id != stored_id):
+                    if stored_id is None:
+                        print(f"[Uploader] 📋 Using local client secret from '{check_path}' (fresh start)")
+                    else:
+                        print(f"[Uploader] 🔄 Detected local client secret update in '{check_path}'.")
+                        print(f"[Uploader] New Client ID: ...{local_id[-10:] if local_id else 'None'}")
+                        print(f"[Uploader] Old Client ID: ...{stored_id[-10:] if stored_id else 'None'}")
+                        print("[Uploader] Overwriting cached secret and forcing re-authentication.")
                     
                     try:
                         # Overwrite the stored/decrypted file with the local one
                         shutil.copy(check_path, local_client_path)
                         
-                        # Delete existing token to force re-auth
-                        if os.path.exists(local_token_path):
+                        # Delete existing token to force re-auth (only if client changed)
+                        if stored_id is not None and os.path.exists(local_token_path):
                             os.remove(local_token_path)
                             print(f"[Uploader] Deleted stale token: {local_token_path}")
                         
