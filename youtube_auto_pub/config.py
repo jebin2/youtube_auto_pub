@@ -52,8 +52,7 @@ class YouTubeConfig:
     host_network: bool = False
     google_email: Optional[str] = None
     google_password: Optional[str] = None
-    project_path: Optional[str] = None  # Project root for finding local client secrets
-    clear_encrypt_dir: bool = False  # Whether to clear encrypt directory on init
+    project_path: Optional[str] = None
 
     
     def __post_init__(self):

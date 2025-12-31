@@ -52,8 +52,7 @@ class TokenManager:
         
         # Clean up existing encrypt directory
         if self._dir_exists(self.config.encrypt_path):
-            if self.config.clear_encrypt_dir:
-                self._remove_directory(self.config.encrypt_path)
+            self._remove_directory(self.config.encrypt_path)
         
         self._create_directory(self.config.encrypt_path)
         
