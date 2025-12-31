@@ -323,28 +323,28 @@ class GoogleOAuthAutomator:
         try:
             # Focus address bar with Ctrl+L
             subprocess.run([
-                'docker', 'exec', '-e', 'DISPLAY=:99.0', docker_name,
+                'docker', 'exec', docker_name,
                 'xdotool', 'key', 'ctrl+l'
             ], timeout=5, check=True)
             time.sleep(0.5)
             
             # Select all with Ctrl+A
             subprocess.run([
-                'docker', 'exec', '-e', 'DISPLAY=:99.0', docker_name,
+                'docker', 'exec', docker_name,
                 'xdotool', 'key', 'ctrl+a'
             ], timeout=5, check=True)
             time.sleep(0.3)
             
             # Copy with Ctrl+C
             subprocess.run([
-                'docker', 'exec', '-e', 'DISPLAY=:99.0', docker_name,
+                'docker', 'exec', docker_name,
                 'xdotool', 'key', 'ctrl+c'
             ], timeout=5, check=True)
             time.sleep(0.5)
             
             # Read clipboard using xclip inside the container
             result = subprocess.run([
-                'docker', 'exec', '-e', 'DISPLAY=:99.0', docker_name,
+                'docker', 'exec', docker_name,
                 'xclip', '-selection', 'clipboard', '-o'
             ], capture_output=True, text=True, timeout=5, check=True)
             url = result.stdout.strip()
