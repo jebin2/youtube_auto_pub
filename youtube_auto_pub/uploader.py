@@ -161,8 +161,8 @@ class YouTubeUploader:
             Authenticated YouTube API service object
         """
         scopes = self.config.scopes
-        token_path = self.config.token_path
-        client_path = self.config.client_secret_path
+        token_path = self.config.token_filename
+        client_path = self.config.client_secret_filename
         
         # Return cached service if available
         if cache_key and cache_key in self._services:
