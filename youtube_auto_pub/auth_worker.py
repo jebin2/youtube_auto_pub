@@ -26,7 +26,7 @@ def process_auth(config: YouTubeConfig) -> None:
     Args:
         config: YouTubeConfig instance containing paths and scopes
     """
-    flow = InstalledAppFlow.from_client_secrets_file(config.client_secret_path, config.scopes)
+    flow = InstalledAppFlow.from_client_secrets_file(config.client_id_path, config.scopes)
     creds = flow.run_local_server(
         port=0,
         access_type='offline',
@@ -36,9 +36,9 @@ def process_auth(config: YouTubeConfig) -> None:
         authorization_prompt_message="Please visit this URL to authorize this application: {url}"
     )
     
-    with open(config.token_path, 'w') as token:
+    with open(config.token_file_path, 'w') as token:
         token.write(creds.to_json())
-        print(f"[Auth] Credentials saved to {config.token_path}.")
+        print(f"[Auth] Credentials saved to {config.token_file_path}.")
 
 
 def process_auth_via_code(
@@ -62,7 +62,7 @@ def process_auth_via_code(
     _remove_file(config.authorization_code_path)
     
     flow = Flow.from_client_secrets_file(
-        config.client_secret_path,
+        config.client_id_path,
         scopes=config.scopes,
         redirect_uri='http://localhost/'
     )
@@ -118,9 +118,9 @@ def process_auth_via_code(
     flow.fetch_token(code=code)
     creds = flow.credentials
 
-    with open(config.token_path, 'w') as token:
+    with open(config.token_file_path, 'w') as token:
         token.write(creds.to_json())
-        print(f"[Auth] Credentials saved to '{config.token_path}'.")
+        print(f"[Auth] Credentials saved to '{config.token_file_path}'.")
     
     return auth_url
 
@@ -171,8 +171,8 @@ if __name__ == "__main__":
     scopes = args.scopes.split(",")
     
     config = YouTubeConfig(
-        client_secret_path=args.client,
-        token_path=args.token,
+        client_secret_filename=args.client,
+        token_filename=args.token,
         scopes=scopes
     )
     

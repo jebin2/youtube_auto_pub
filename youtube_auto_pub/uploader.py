@@ -306,13 +306,13 @@ class YouTubeUploader:
                 self.config,
                 prompt=not self.config.is_docker
             )
-            return Credentials.from_authorized_user_file(self.config.token_path, self.config.scopes)
+            return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
         else:
             # GUI mode - use subprocess + browser automation
             cmd = [
                 sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
-                '-c', self.config.client_secret_path, 
-                '-t', self.config.token_path, 
+                '-c', self.config.client_id_path, 
+                '-t', self.config.token_file_path, 
                 '-s', ','.join(self.config.scopes)
             ]
             
@@ -343,11 +343,11 @@ class YouTubeUploader:
                     automator = GoogleOAuthAutomator(config=self.config)
                     automator.authorize_oauth(auth_url)
                 elif "Credentials saved to" in line:
-                    return Credentials.from_authorized_user_file(self.config.token_path, self.config.scopes)
+                    return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
             
             # Wait for process to complete
             process.wait()
-            return Credentials.from_authorized_user_file(self.config.token_path, self.config.scopes)
+            return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
 
     def upload_video(
         self,

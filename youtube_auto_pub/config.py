@@ -53,8 +53,8 @@ class YouTubeConfig:
     google_email: Optional[str] = None
     google_password: Optional[str] = None
     project_path: Optional[str] = None
-    client_secret_path: str = None
-    token_path: str = None
+    client_secret_filename: str = None
+    token_filename: str = None
     scopes: List[str] = field(default_factory=lambda: [
         'https://www.googleapis.com/auth/youtube.upload',
         'https://www.googleapis.com/auth/youtube',
@@ -66,6 +66,16 @@ class YouTubeConfig:
         """Compute derived values after initialization."""
         if self.headless_mode is None:
             self.headless_mode = self.is_docker or not self.has_display
+
+    @property
+    def client_id_path(self) -> str:
+        """Get the full path to the client secret file."""
+        return os.path.join(self.encrypt_path, self.client_secret_filename)
+
+    @property
+    def token_file_path(self) -> str:
+        """Get the full path to the token file."""
+        return os.path.join(self.encrypt_path, self.token_filename)
 
 
 # Default YouTube API scopes
