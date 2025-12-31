@@ -274,7 +274,7 @@ class YouTubeUploader:
         if not creds or not creds.valid:
             if not creds or not creds.refresh_token:
                 print("[Uploader] No valid credentials or refresh token. Initiating authentication flow.")
-                creds = self._run_auth_flow(local_client_path, local_token_path, scopes)
+                creds = self._run_auth_flow()
 
         # Upload updated credentials
         self.token_manager.encrypt_and_upload([local_token_path, local_client_path])
@@ -291,10 +291,6 @@ class YouTubeUploader:
         
         return service
 
-    def _run_auth_flow(
-        self,
-        client_path: str,
-        token_path: str,
     def _run_auth_flow(self) -> Credentials:
         """Run OAuth authentication flow.
         
