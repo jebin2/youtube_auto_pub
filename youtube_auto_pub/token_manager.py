@@ -42,13 +42,13 @@ class TokenManager:
         tm.encrypt_and_upload(["yttoken.json", "ytcredentials.json"])
     """
     
-    def __init__(self, config: Optional[YouTubeConfig] = None):
+    def __init__(self, config: YouTubeConfig):
         """Initialize TokenManager with configuration.
         
         Args:
-            config: YouTubeConfig instance. If None, uses default config.
+            config: YouTubeConfig instance.
         """
-        self.config = config or YouTubeConfig()
+        self.config = config
         
         # Clean up existing encrypt directory by emptying it
         # (Preserves the directory itself which might be a mount point)
@@ -174,7 +174,8 @@ if __name__ == "__main__":
     
     if len(sys.argv) > 1:
         files_to_upload = sys.argv[1:]
-        tm = TokenManager()
+        config = YouTubeConfig()
+        tm = TokenManager(config)
         tm.encrypt_and_upload(files_to_upload)
     else:
         print("Usage: python token_manager.py <file1> <file2> ...")

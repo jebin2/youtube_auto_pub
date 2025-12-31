@@ -42,18 +42,18 @@ class GoogleOAuthAutomator:
     
     def __init__(
         self,
+        config: YouTubeConfig,
         email: Optional[str] = None,
-        password: Optional[str] = None,
-        config: Optional[YouTubeConfig] = None
+        password: Optional[str] = None
     ):
         """Initialize OAuth automator.
         
         Args:
+            config: YouTubeConfig instance for browser settings and credentials
             email: Google account email (optional, can use config or prompt)
             password: Google account password or app password (optional)
-            config: YouTubeConfig instance for browser settings and credentials
         """
-        self.config = config or YouTubeConfig()
+        self.config = config
         # Priority: constructor params > config values
         self.email = email or self.config.google_email
         self.password = password or self.config.google_password

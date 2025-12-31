@@ -14,27 +14,19 @@ from urllib.parse import urlparse, parse_qs
 
 from google_auth_oauthlib.flow import InstalledAppFlow, Flow
 
-from youtube_auto_pub.config import YouTubeConfig, YOUTUBE_SCOPES
+from youtube_auto_pub.config import YouTubeConfig
 
 
-def process_auth(
-    client_path: str,
-    token_path: str,
-    scopes: Optional[List[str]] = None
-) -> None:
+def process_auth(config: YouTubeConfig) -> None:
     """Run OAuth flow with local server (opens browser).
     
     This method starts a local HTTP server and opens a browser
     for the user to complete authentication.
     
     Args:
-        client_path: Path to client_secrets.json file
-        token_path: Path where token.json will be saved
-        scopes: List of OAuth scopes (defaults to YOUTUBE_SCOPES)
+        config: YouTubeConfig instance containing paths and scopes
     """
-    scopes = scopes or YOUTUBE_SCOPES
-    
-    flow = InstalledAppFlow.from_client_secrets_file(client_path, scopes)
+    flow = InstalledAppFlow.from_client_secrets_file(config.client_secret_path, config.scopes)
     creds = flow.run_local_server(
         port=0,
         access_type='offline',
@@ -44,17 +36,14 @@ def process_auth(
         authorization_prompt_message="Please visit this URL to authorize this application: {url}"
     )
     
-    with open(token_path, 'w') as token:
+    with open(config.token_path, 'w') as token:
         token.write(creds.to_json())
-        print(f"[Auth] Credentials saved to {token_path}.")
+        print(f"[Auth] Credentials saved to {config.token_path}.")
 
 
 def process_auth_via_code(
-    client_path: str,
-    token_path: str,
-    scopes: Optional[List[str]] = None,
-    prompt: bool = False,
-    config: Optional[YouTubeConfig] = None
+    config: YouTubeConfig,
+    prompt: bool = False
 ) -> str:
     """Run OAuth flow with manual code entry.
     
@@ -63,24 +52,18 @@ def process_auth_via_code(
     and waits for the user to paste the callback URL.
     
     Args:
-        client_path: Path to client_secrets.json file
-        token_path: Path where token.json will be saved
-        scopes: List of OAuth scopes (defaults to YOUTUBE_SCOPES)
+        config: YouTubeConfig instance containing paths and scopes
         prompt: If True, prompt user for code. If False, wait for code file.
-        config: YouTubeConfig for authorization_code_path
         
     Returns:
         The authorization URL that was generated
     """
-    scopes = scopes or YOUTUBE_SCOPES
-    config = config or YouTubeConfig()
-    
     # Clean up any existing code file
     _remove_file(config.authorization_code_path)
     
     flow = Flow.from_client_secrets_file(
-        client_path,
-        scopes=scopes,
+        config.client_secret_path,
+        scopes=config.scopes,
         redirect_uri='http://localhost/'
     )
 
@@ -135,9 +118,9 @@ def process_auth_via_code(
     flow.fetch_token(code=code)
     creds = flow.credentials
 
-    with open(token_path, 'w') as token:
+    with open(config.token_path, 'w') as token:
         token.write(creds.to_json())
-        print(f"[Auth] Credentials saved to '{token_path}'.")
+        print(f"[Auth] Credentials saved to '{config.token_path}'.")
     
     return auth_url
 
@@ -187,12 +170,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
     scopes = args.scopes.split(",")
     
+    config = YouTubeConfig(
+        client_secret_path=args.client,
+        token_path=args.token,
+        scopes=scopes
+    )
+    
     if args.prompt:
         # Interactive prompt for code
-        process_auth_via_code(args.client, args.token, scopes, prompt=True)
+        process_auth_via_code(config, prompt=True)
     elif args.file_mode:
         # File-based wait for code (no prompt)
-        process_auth_via_code(args.client, args.token, scopes, prompt=False)
+        process_auth_via_code(config, prompt=False)
     else:
         # Default local server (browser callback)
-        process_auth(args.client, args.token, scopes)
+        process_auth(config)

@@ -81,13 +81,13 @@ class YouTubeUploader:
         )
     """
     
-    def __init__(self, config: Optional[YouTubeConfig] = None):
+    def __init__(self, config: YouTubeConfig):
         """Initialize YouTube uploader.
         
         Args:
             config: YouTubeConfig instance for credential paths
         """
-        self.config = config or YouTubeConfig()
+        self.config = config
         self.token_manager = TokenManager(self.config)
         self._services: dict = {}
 
@@ -295,15 +295,9 @@ class YouTubeUploader:
         self,
         client_path: str,
         token_path: str,
-        scopes: List[str]
-    ) -> Credentials:
+    def _run_auth_flow(self) -> Credentials:
         """Run OAuth authentication flow.
         
-        Args:
-            client_path: Path to client secrets file
-            token_path: Path where token will be saved
-            scopes: OAuth scopes
-            
         Returns:
             Authenticated credentials
         """
@@ -313,17 +307,18 @@ class YouTubeUploader:
         if self.config.headless_mode:
             # Headless mode - use code-based auth
             process_auth_via_code(
-                client_path, 
-                token_path, 
-                scopes, 
-                prompt=not self.config.is_docker,
-                config=self.config
+                self.config,
+                prompt=not self.config.is_docker
             )
-            return Credentials.from_authorized_user_file(token_path, scopes)
+            return Credentials.from_authorized_user_file(self.config.token_path, self.config.scopes)
         else:
             # GUI mode - use subprocess + browser automation
-            cmd = [sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
-                   '-c', client_path, '-t', token_path, '-s', ','.join(scopes)]
+            cmd = [
+                sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
+                '-c', self.config.client_secret_path, 
+                '-t', self.config.token_path, 
+                '-s', ','.join(self.config.scopes)
+            ]
             
             # Use file-mode if we suspect network isolation (e.g. Docker)
             if self.config.is_docker or True: # Force file mode for better stability in remote envs
@@ -352,11 +347,11 @@ class YouTubeUploader:
                     automator = GoogleOAuthAutomator(config=self.config)
                     automator.authorize_oauth(auth_url)
                 elif "Credentials saved to" in line:
-                    return Credentials.from_authorized_user_file(token_path, scopes)
+                    return Credentials.from_authorized_user_file(self.config.token_path, self.config.scopes)
             
             # Wait for process to complete
             process.wait()
-            return Credentials.from_authorized_user_file(token_path, scopes)
+            return Credentials.from_authorized_user_file(self.config.token_path, self.config.scopes)
 
     def upload_video(
         self,
