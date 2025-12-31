@@ -347,6 +347,11 @@ class GoogleOAuthAutomator:
         except subprocess.TimeoutExpired:
             print("[OAuth] xdotool command timed out")
             return None
+        except subprocess.CalledProcessError as e:
+            print(f"[OAuth] Command failed with exit status {e.returncode}")
+            if e.stderr:
+                print(f"[OAuth] Error output: {e.stderr}")
+            return None
         except Exception as e:
             print(f"[OAuth] Error capturing URL: {e}")
             return None
