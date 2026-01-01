@@ -283,6 +283,21 @@ class YouTubeUploader:
         service = build('youtube', 'v3', credentials=creds)
         print("[Uploader] YouTube service built successfully.")
         
+        # Fetch and display the authenticated channel info
+        try:
+            channel_response = service.channels().list(
+                part='snippet',
+                mine=True
+            ).execute()
+            
+            if channel_response.get('items'):
+                channel_title = channel_response['items'][0]['snippet']['title']
+                print(f"[Uploader] ✓ Authenticated as: {channel_title}")
+            else:
+                print("[Uploader] ✓ Authenticated (channel info not available)")
+        except Exception as e:
+            print(f"[Uploader] ✓ Authenticated (could not fetch channel info: {e})")
+        
 
         
         # Cache the service
