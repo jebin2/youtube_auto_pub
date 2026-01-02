@@ -144,21 +144,23 @@ class YouTubeUploader:
 
     def get_service(
         self,
-        cache_key: Optional[str] = None
+        cache_key: Optional[str] = None,
+        skip_auth_flow: bool = False
     ) -> Any:
         """Get an authenticated YouTube API service.
         
         This method:
         1. Downloads encrypted credentials from HuggingFace Hub
         2. Loads/refreshes OAuth tokens
-        3. Initiates auth flow if needed
+        3. Initiates auth flow if needed (unless skip_auth_flow=True)
         4. Returns an authenticated YouTube service
         
         Args:
             cache_key: Optional key to cache the service for reuse
+            skip_auth_flow: If True, return None instead of triggering auth flow
             
         Returns:
-            Authenticated YouTube API service object
+            Authenticated YouTube API service object, or None if skip_auth_flow=True and no valid creds
         """
         scopes = self.config.scopes
         token_path = self.config.token_filename
@@ -273,6 +275,9 @@ class YouTubeUploader:
         # Run auth flow if needed
         if not creds or not creds.valid:
             if not creds or not creds.refresh_token:
+                if skip_auth_flow:
+                    print("[Uploader] No valid credentials. Skipping auth flow (skip_auth_flow=True).")
+                    return None
                 print("[Uploader] No valid credentials or refresh token. Initiating authentication flow.")
                 creds = self._run_auth_flow()
 
