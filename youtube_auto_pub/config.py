@@ -53,6 +53,7 @@ class YouTubeConfig:
     google_email: Optional[str] = None
     google_password: Optional[str] = None
     project_path: Optional[str] = None
+    local_client_secret_path: Optional[str] = None
     client_secret_filename: str = None
     token_filename: str = None
     scopes: List[str] = field(default_factory=lambda: [

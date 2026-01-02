@@ -189,6 +189,10 @@ class YouTubeUploader:
         if hasattr(self.config, 'project_path') and self.config.project_path:
             project_client_path = os.path.join(self.config.project_path, client_path)
             possible_local_paths.append(project_client_path)
+
+        # Add explicitly provided local client secret path (highest priority)
+        if hasattr(self.config, 'local_client_secret_path') and self.config.local_client_secret_path:
+             possible_local_paths.append(self.config.local_client_secret_path)
         
         # Check /app directory for Docker mounted files
         app_client_path = os.path.join('/app', client_path)
