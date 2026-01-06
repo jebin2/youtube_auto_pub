@@ -82,20 +82,30 @@ def process_auth_via_code(
         # Wait for code file to be created (by browser automation)
         count = 0
         max_attempts = 20
+        print(f"[Auth] Waiting for authorization code in {config.authorization_code_path}")
         while count < max_attempts and (code is None or code == ""):
             try:
-                with open(config.authorization_code_path, 'r') as file:
-                    code = file.read().strip()
-                print("[Auth] Waiting for authorization code...", end="\r")
-                time.sleep(10)
-                count += 1
+                if os.path.exists(config.authorization_code_path):
+                     with open(config.authorization_code_path, 'r') as file:
+                        code = file.read().strip()
+                     print(f"[Auth] Found code file. Content length: {len(code)}")
+                else:
+                     print(f"[Auth] Code file not found at {config.authorization_code_path}")
+                
+                if not code:
+                     print("[Auth] Waiting for authorization code...", end="\r")
+                     time.sleep(10)
+                     count += 1
             except FileNotFoundError:
+                print(f"[Auth] FileNotFoundError for {config.authorization_code_path}")
                 time.sleep(10)
                 count += 1
-            except Exception:
+            except Exception as e:
+                print(f"[Auth] Error reading code file: {e}")
                 pass
 
     if not code:
+        print(f"[Auth] Timed out waiting for code at {config.authorization_code_path}")
         raise ValueError("No authorization code received")
 
     # Clean up URL (handle encoded entities if read from file/logs)
@@ -112,7 +122,6 @@ def process_auth_via_code(
 
     # Fetch token - suppress scope change warnings by setting include_granted_scopes
     # Google may return additional scopes (like 'openid') that weren't originally requested
-    import os
     os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
     
     flow.fetch_token(code=code)
@@ -167,13 +176,20 @@ if __name__ == "__main__":
         help="Use file-based auth exchange instead of local server"
     )
 
+    parser.add_argument(
+        "--code-path",
+        help="Path to authorization code file",
+        default="./code.txt"
+    )
+
     args = parser.parse_args()
     scopes = args.scopes.split(",")
     
     config = YouTubeConfig(
         client_secret_filename=args.client,
         token_filename=args.token,
-        scopes=scopes
+        scopes=scopes,
+        authorization_code_path=args.code_path
     )
     
     if args.prompt:

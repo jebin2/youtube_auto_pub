@@ -337,7 +337,8 @@ class YouTubeUploader:
                 sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
                 '-c', self.config.client_id_path, 
                 '-t', self.config.token_file_path, 
-                '-s', ','.join(self.config.scopes)
+                '-s', ','.join(self.config.scopes),
+                '--code-path', self.config.authorization_code_path
             ]
             
             # Use file-mode if we suspect network isolation (e.g. Docker)
