@@ -208,6 +208,15 @@ class YouTubeUploader:
         # Try each possible location
         stored_id = self._extract_client_id(local_client_path)
         
+        print(f"[Uploader DEBUG] CWD: {os.getcwd()}")
+        print(f"[Uploader DEBUG] Target local_client_path: {local_client_path} (Exists: {os.path.exists(local_client_path)})")
+        if os.path.exists(os.path.dirname(local_client_path)):
+             print(f"[Uploader DEBUG] Contents of {os.path.dirname(local_client_path)}: {os.listdir(os.path.dirname(local_client_path))}")
+        else:
+             print(f"[Uploader DEBUG] Directory {os.path.dirname(local_client_path)} does not exist.")
+
+        print(f"[Uploader DEBUG] Checking possible local paths for secret: {possible_local_paths}")
+
         for check_path in possible_local_paths:
             if os.path.exists(check_path) and os.path.abspath(check_path) != os.path.abspath(local_client_path):
                 local_id = self._extract_client_id(check_path)
