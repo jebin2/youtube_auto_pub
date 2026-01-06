@@ -26,11 +26,11 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "google-auth>=2.0.0",
-    "google-auth-oauthlib>=1.0.0",
-    "google-api-python-client>=2.0.0",
+    "google-auth==2.28.1",
+    "google-auth-oauthlib==1.2.0",
+    "google-api-python-client==2.118.0",
     "huggingface_hub>=0.16.0",
-    "cryptography>=3.0.0",
+    "cryptography>=42.0.0",
     "browser-manager @ git+https://github.com/jebin2/browser_manager.git",
 ]
 
