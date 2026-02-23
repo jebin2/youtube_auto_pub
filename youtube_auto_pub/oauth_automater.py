@@ -294,25 +294,14 @@ class GoogleOAuthAutomator:
         import time
         
         buttons = page.query_selector_all("button")
-        
+
         for button in buttons:
             data_destination = button.get_attribute("data-destination-info")
             if data_destination and "Choosing an account will redirect you to" in data_destination:
-                button_text = button.inner_text()
-                
-                # Find matching account in form
-                accounts = page.query_selector_all("form li")
-                for account in accounts:
-                    account_text = account.inner_text()
-                    if button_text in account_text:
-                        clickable_div = account.query_selector("div")
-                        if clickable_div:
-                            print(f"[OAuth] Found account div: {clickable_div}")
-                            clickable_div.focus()
-                            time.sleep(1)
-                            clickable_div.click(force=True)
-                            time.sleep(10)
-                            break
+                button_text = button.inner_text().strip()
+                print(f"[OAuth] Clicking brand account confirm button: '{button_text}'")
+                button.click(force=True)
+                time.sleep(10)
                 break
 
         # Handle sequence of Continue screens and Consent screen
