@@ -354,38 +354,37 @@ class GoogleOAuthAutomator:
                             if box:
                                 x = box['x'] + box['width'] / 2
                                 y = box['y'] + box['height'] / 2
-                                print(f"[OAuth][DEBUG] Mouse click at ({x:.0f}, {y:.0f}) box={box}")
                                 page.mouse.move(x, y)
                                 time.sleep(0.3)
                                 page.mouse.click(x, y)
-                                print("[OAuth][DEBUG] Strategy 1 (mouse.click) executed")
+                                print(f"[OAuth] Clicked '{btext}' via mouse at ({x:.0f}, {y:.0f})")
                                 return True
                         except Exception as e1:
-                            print(f"[OAuth][DEBUG] Strategy 1 failed: {e1}")
+                            print(f"[OAuth] Strategy 1 (mouse) failed: {e1}")
 
                         # Strategy 2: JS eval click (bypasses pointer-events CSS)
                         try:
                             page.evaluate("(el) => el.click()", button)
-                            print("[OAuth][DEBUG] Strategy 2 (JS eval click) executed")
+                            print(f"[OAuth] Clicked '{btext}' via JS eval")
                             return True
                         except Exception as e2:
-                            print(f"[OAuth][DEBUG] Strategy 2 failed: {e2}")
+                            print(f"[OAuth] Strategy 2 (JS eval) failed: {e2}")
 
                         # Strategy 3: dispatch click event
                         try:
                             button.dispatch_event("click")
-                            print("[OAuth][DEBUG] Strategy 3 (dispatch_event) executed")
+                            print(f"[OAuth] Clicked '{btext}' via dispatch_event")
                             return True
                         except Exception as e3:
-                            print(f"[OAuth][DEBUG] Strategy 3 failed: {e3}")
+                            print(f"[OAuth] Strategy 3 (dispatch_event) failed: {e3}")
 
                         # Strategy 4: force=True fallback
                         try:
                             button.click(force=True)
-                            print("[OAuth][DEBUG] Strategy 4 (force click) executed")
+                            print(f"[OAuth] Clicked '{btext}' via force=True")
                             return True
                         except Exception as e4:
-                            print(f"[OAuth][DEBUG] Strategy 4 failed: {e4}")
+                            print(f"[OAuth] Strategy 4 (force) failed: {e4}")
 
                         break
             except Exception as e:
@@ -393,78 +392,32 @@ class GoogleOAuthAutomator:
             return False
 
         def _dump_diagnostics():
-            """Print detailed page state for debugging."""
+            """Print concise page state for monitoring."""
             try:
                 heading = page.query_selector("#headingText")
-                print(f"[OAuth][DEBUG] #headingText = {heading.text_content() if heading else 'NOT FOUND'}")
-            except Exception as e:
-                print(f"[OAuth][DEBUG] #headingText error: {e}")
+                print(f"[OAuth] Page heading: '{heading.text_content() if heading else 'none'}'")
+            except Exception:
+                pass
 
             try:
                 all_buttons = page.query_selector_all("button")
-                print(f"[OAuth][DEBUG] buttons found: {len(all_buttons)}")
                 for b in all_buttons:
                     try:
                         btext = b.inner_text().strip()
                         bdata = b.get_attribute("data-destination-info") or ""
-                        btype = b.get_attribute("type") or ""
-                        print(f"[OAuth][DEBUG]   button text='{btext}' type='{btype}' data-destination-info='{bdata[:80]}'")
+                        if btext or bdata:
+                            print(f"[OAuth]   button='{btext}' has_destination={bool(bdata)}")
                     except Exception:
                         pass
-            except Exception as e:
-                print(f"[OAuth][DEBUG] button scan error: {e}")
+            except Exception:
+                pass
 
             try:
-                form_lis = page.query_selector_all("form li")
-                print(f"[OAuth][DEBUG] form li items: {len(form_lis)}")
-                for li in form_lis:
-                    try:
-                        print(f"[OAuth][DEBUG]   form li text='{li.inner_text()[:80]}'")
-                    except Exception:
-                        pass
-            except Exception as e:
-                print(f"[OAuth][DEBUG] form li scan error: {e}")
-
-            try:
-                checkboxes = page.query_selector_all('input[type="checkbox"]')
-                print(f"[OAuth][DEBUG] checkboxes: {len(checkboxes)}")
-                for cb in checkboxes:
-                    try:
-                        print(f"[OAuth][DEBUG]   checkbox name='{cb.get_attribute('name') or ''}' checked={cb.is_checked()}")
-                    except Exception:
-                        pass
-            except Exception as e:
-                print(f"[OAuth][DEBUG] checkbox scan error: {e}")
-
-            try:
-                inputs = page.query_selector_all("input")
-                print(f"[OAuth][DEBUG] all inputs: {len(inputs)}")
-                for inp in inputs:
-                    try:
-                        itype = inp.get_attribute("type") or ""
-                        iname = inp.get_attribute("name") or ""
-                        print(f"[OAuth][DEBUG]   input type='{itype}' name='{iname}'")
-                    except Exception:
-                        pass
-            except Exception as e:
-                print(f"[OAuth][DEBUG] input scan error: {e}")
-
-            try:
-                body = page.query_selector("body")
-                if body:
-                    text = body.inner_text()[:400].replace('\n', ' ')
-                    print(f"[OAuth][DEBUG] page body (first 400): '{text}'")
-            except Exception as e:
-                print(f"[OAuth][DEBUG] body text error: {e}")
-
-            # Dump form HTML so we can see the exact structure of the account chooser
-            try:
-                form = page.query_selector("form")
-                if form:
-                    html = form.inner_html()[:3000]
-                    print(f"[OAuth][DEBUG] form HTML (first 3000):\n{html}")
-            except Exception as e:
-                print(f"[OAuth][DEBUG] form HTML error: {e}")
+                checkboxes = page.query_selector_all('form input[type="checkbox"]')
+                if checkboxes:
+                    print(f"[OAuth]   form checkboxes: {len(checkboxes)}")
+            except Exception:
+                pass
 
         # ── Initial brand account click ────────────────────────────────────
         if _click_brand_account_button():
