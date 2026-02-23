@@ -284,39 +284,75 @@ class GoogleOAuthAutomator:
 
     def _handle_account_selection_and_continue(self, page) -> bool:
         """Handle account selection and consent screens.
-        
+
         Args:
             page: Browser page object
-            
+
         Returns:
             True if successful
         """
         import time
-        
-        buttons = page.query_selector_all("button")
 
-        for button in buttons:
-            data_destination = button.get_attribute("data-destination-info")
-            if data_destination and "Choosing an account will redirect you to" in data_destination:
-                button_text = button.inner_text().strip()
-                print(f"[OAuth] Clicking brand account confirm button: '{button_text}'")
-                button.click(force=True)
-                time.sleep(10)
-                break
-
-        # Handle sequence of Continue screens and Consent screen
-        # We loop to handle variable number of "Continue" intermediate pages
-        max_attempts = 10
-        for i in range(max_attempts):
-            print(f"[OAuth] Page interaction loop {i+1}/{max_attempts}")
-            time.sleep(10) # Give page time to settle
-
-            # ── Deep diagnostics ──────────────────────────────────────────
+        def _playwright_url_has_code() -> str:
+            """Check page.url directly via Playwright — fastest redirect detection."""
             try:
-                print(f"[OAuth][DEBUG] page.url = {page.url}")
+                url = page.url
+                print(f"[OAuth][DEBUG] playwright page.url = {url[:120]}")
+                if url and "code=" in url:
+                    return url
             except Exception as e:
-                print(f"[OAuth][DEBUG] page.url error: {e}")
+                print(f"[OAuth][DEBUG] playwright page.url error: {e}")
+            return None
 
+        def _save_url(url: str) -> bool:
+            with open(self.config.authorization_code_path, 'w') as f:
+                f.write(url)
+            print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
+            return True
+
+        def _check_redirect() -> str:
+            """Return redirect URL if found via Playwright or CDP, else None."""
+            url = _playwright_url_has_code()
+            if url:
+                return url
+            captured = self._capture_url_from_address_bar()
+            if captured and "code=" in captured:
+                return captured
+            return None
+
+        def _dismiss_banners() -> bool:
+            """Click 'Got it' / 'OK' / 'Dismiss' banners that may cover the page."""
+            try:
+                for b in page.query_selector_all("button"):
+                    try:
+                        btext = b.inner_text().strip().lower()
+                        if btext in ("got it", "ok", "dismiss", "close"):
+                            print(f"[OAuth] Dismissing banner: '{b.inner_text().strip()}'")
+                            b.click(force=True)
+                            time.sleep(2)
+                            return True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return False
+
+        def _click_brand_account_button() -> bool:
+            """Click the first button with data-destination-info. Returns True if clicked."""
+            try:
+                for button in page.query_selector_all("button"):
+                    data_destination = button.get_attribute("data-destination-info")
+                    if data_destination and "Choosing an account will redirect you to" in data_destination:
+                        btext = button.inner_text().strip()
+                        print(f"[OAuth] Clicking brand account confirm button: '{btext}'")
+                        button.click(force=True)
+                        return True
+            except Exception as e:
+                print(f"[OAuth][DEBUG] brand button click error: {e}")
+            return False
+
+        def _dump_diagnostics():
+            """Print detailed page state for debugging."""
             try:
                 heading = page.query_selector("#headingText")
                 print(f"[OAuth][DEBUG] #headingText = {heading.text_content() if heading else 'NOT FOUND'}")
@@ -330,7 +366,8 @@ class GoogleOAuthAutomator:
                     try:
                         btext = b.inner_text().strip()
                         bdata = b.get_attribute("data-destination-info") or ""
-                        print(f"[OAuth][DEBUG]   button text='{btext}' data-destination-info='{bdata[:80]}'")
+                        btype = b.get_attribute("type") or ""
+                        print(f"[OAuth][DEBUG]   button text='{btext}' type='{btype}' data-destination-info='{bdata[:80]}'")
                     except Exception:
                         pass
             except Exception as e:
@@ -348,85 +385,112 @@ class GoogleOAuthAutomator:
                 print(f"[OAuth][DEBUG] form li scan error: {e}")
 
             try:
-                all_lis = page.query_selector_all("li")
-                print(f"[OAuth][DEBUG] all li items: {len(all_lis)}")
-                for li in all_lis[:5]:
+                checkboxes = page.query_selector_all('input[type="checkbox"]')
+                print(f"[OAuth][DEBUG] checkboxes: {len(checkboxes)}")
+                for cb in checkboxes:
                     try:
-                        print(f"[OAuth][DEBUG]   li text='{li.inner_text()[:80]}'")
+                        print(f"[OAuth][DEBUG]   checkbox name='{cb.get_attribute('name') or ''}' checked={cb.is_checked()}")
                     except Exception:
                         pass
             except Exception as e:
-                print(f"[OAuth][DEBUG] all li scan error: {e}")
+                print(f"[OAuth][DEBUG] checkbox scan error: {e}")
 
             try:
-                checkboxes = page.query_selector_all('input[type="checkbox"]')
-                print(f"[OAuth][DEBUG] checkboxes: {len(checkboxes)}")
+                inputs = page.query_selector_all("input")
+                print(f"[OAuth][DEBUG] all inputs: {len(inputs)}")
+                for inp in inputs:
+                    try:
+                        itype = inp.get_attribute("type") or ""
+                        iname = inp.get_attribute("name") or ""
+                        print(f"[OAuth][DEBUG]   input type='{itype}' name='{iname}'")
+                    except Exception:
+                        pass
             except Exception as e:
-                print(f"[OAuth][DEBUG] checkbox scan error: {e}")
-            # ─────────────────────────────────────────────────────────────
+                print(f"[OAuth][DEBUG] input scan error: {e}")
 
-            # 1. Check for Checkbox inside form (Consent Page)
-            # User reported "Select all" label might be missing, so we check first checkbox in form
-            form_checkbox = page.query_selector('form input[type="checkbox"]')
-            if form_checkbox:
-                print("[OAuth] Found checkbox in form (Consent Page)")
-                
-                if not form_checkbox.is_checked():
-                     print("[OAuth] Checking checkbox")
-                     form_checkbox.click(force=True)
-                     time.sleep(1)
-                
-                # Now click Continue on this page to finish
-                continue_buttons = page.query_selector_all("button")
-                for button in continue_buttons:
-                    if button.inner_text() == "Continue":
-                        print("[OAuth] Clicking final Continue")
+            try:
+                body = page.query_selector("body")
+                if body:
+                    text = body.inner_text()[:400].replace('\n', ' ')
+                    print(f"[OAuth][DEBUG] page body (first 400): '{text}'")
+            except Exception as e:
+                print(f"[OAuth][DEBUG] body text error: {e}")
+
+        # ── Initial brand account click ────────────────────────────────────
+        if _click_brand_account_button():
+            time.sleep(3)
+            url = _check_redirect()
+            if url:
+                return _save_url(url)
+            print("[OAuth] Brand button clicked, waiting for next page...")
+            time.sleep(7)
+        else:
+            print("[OAuth] No brand account button found on initial scan")
+
+        # ── Loop: handle Continue / consent screens ────────────────────────
+        max_attempts = 15
+        for i in range(max_attempts):
+            print(f"[OAuth] Page interaction loop {i+1}/{max_attempts}")
+
+            # Check for redirect FIRST — fastest exit
+            url = _check_redirect()
+            if url:
+                return _save_url(url)
+
+            time.sleep(5)  # Let page settle
+
+            _dump_diagnostics()
+
+            # Dismiss any "Got it" / info banners
+            _dismiss_banners()
+
+            # Re-check redirect after dismissing banner
+            url = _check_redirect()
+            if url:
+                return _save_url(url)
+
+            # ── a) Brand account button re-appeared ───────────────────────
+            if _click_brand_account_button():
+                time.sleep(5)
+                url = _check_redirect()
+                if url:
+                    return _save_url(url)
+                continue
+
+            # ── b) Consent page: check all checkboxes, then Continue ───────
+            form_checkboxes = page.query_selector_all('form input[type="checkbox"]')
+            if form_checkboxes:
+                print(f"[OAuth] Found {len(form_checkboxes)} checkbox(es) in form (Consent Page)")
+                for cb in form_checkboxes:
+                    try:
+                        if not cb.is_checked():
+                            print("[OAuth] Checking checkbox")
+                            cb.click(force=True)
+                            time.sleep(0.5)
+                    except Exception as e:
+                        print(f"[OAuth][DEBUG] checkbox click error: {e}")
+
+            # ── c) Click any Continue button (case-insensitive) ───────────
+            clicked_continue = False
+            for button in page.query_selector_all("button"):
+                try:
+                    if button.inner_text().strip().lower() == "continue":
+                        print("[OAuth] Clicking Continue button")
                         button.click(force=True)
-                        time.sleep(10)
-                        
-                        # Capture URL from address bar
-                        captured_url = self._capture_url_from_address_bar()
-                        if captured_url and "code=" in captured_url:
-                            with open(self.config.authorization_code_path, 'w') as f:
-                                f.write(captured_url)
-                            print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
-                            return True
-                        else:
-                            print("[OAuth] Failed to get URL with code from clipboard")
-                            return False
-            
-            # 2. Check for "Continue" button (Intermediate or Final Page without checkbox)
-            continue_buttons = page.query_selector_all("button")
-            for button in continue_buttons:
-                if button.inner_text() == "Continue":
-                    print(f"[OAuth] Found Continue button")
-                    button.click(force=True)
-                    time.sleep(5)
-                    
-                    # Check if this led to the redirect
-                    captured_url = self._capture_url_from_address_bar()
-                    if captured_url and "code=" in captured_url:
-                        with open(self.config.authorization_code_path, 'w') as f:
-                            f.write(captured_url)
-                        print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
-                        return True
-                    
-                    # Otherwise continue loop (was intermediate page)
-                    print("[OAuth] Not final redirect, continuing...")
-                    break
+                        clicked_continue = True
+                        time.sleep(5)
+                        url = _check_redirect()
+                        if url:
+                            return _save_url(url)
+                        print("[OAuth] Continue clicked — not final redirect yet, looping...")
+                        break
+                except Exception:
+                    pass
 
-            # If neither found, wait and retry
-            print("[OAuth] No actionable elements found, waiting...")
-            time.sleep(2)
+            if not clicked_continue and not form_checkboxes:
+                print("[OAuth] No actionable elements found, waiting...")
+                time.sleep(5)
 
-            # Check if this led to the redirect
-            captured_url = self._capture_url_from_address_bar()
-            if captured_url and "code=" in captured_url:
-                with open(self.config.authorization_code_path, 'w') as f:
-                    f.write(captured_url)
-                print(f"[OAuth] Written URL to {self.config.authorization_code_path}")
-                return True
-            
         print("[OAuth] Failed to complete OAuth flow within limit")
         return False
 
