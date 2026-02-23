@@ -421,12 +421,13 @@ class GoogleOAuthAutomator:
 
         # ── Initial brand account click ────────────────────────────────────
         if _click_brand_account_button():
-            time.sleep(3)
-            url = _check_redirect()
-            if url:
-                return _save_url(url)
-            print("[OAuth] Brand button clicked, waiting for next page...")
-            time.sleep(7)
+            # Poll for redirect — navigation after mouse click can take several seconds
+            for wait_sec in [3, 5, 7]:
+                time.sleep(wait_sec)
+                url = _check_redirect()
+                if url:
+                    return _save_url(url)
+                print(f"[OAuth] Waiting for navigation after initial brand button click ({wait_sec}s)...")
         else:
             print("[OAuth] No brand account button found on initial scan")
 
@@ -454,32 +455,14 @@ class GoogleOAuthAutomator:
 
             # ── a) Brand account button re-appeared ───────────────────────
             if _click_brand_account_button():
-                time.sleep(5)
-                url = _check_redirect()
-                if url:
-                    return _save_url(url)
-                # Also try clicking li items as a fallback (different HTML structure)
-                print("[OAuth] Button click didn't navigate — trying li items as fallback")
-                try:
-                    for li in page.query_selector_all("form li"):
-                        try:
-                            li_text = li.inner_text().strip()
-                            print(f"[OAuth][DEBUG] Trying li click: '{li_text[:60]}'")
-                            # Try real mouse click on li
-                            li.scroll_into_view_if_needed()
-                            box = li.bounding_box()
-                            if box:
-                                page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-                                time.sleep(0.2)
-                                page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-                                time.sleep(3)
-                                url = _check_redirect()
-                                if url:
-                                    return _save_url(url)
-                        except Exception as e:
-                            print(f"[OAuth][DEBUG] li click error: {e}")
-                except Exception as e:
-                    print(f"[OAuth][DEBUG] li iteration error: {e}")
+                # Wait longer — mouse click navigation can take time
+                for wait_sec in [3, 5, 7]:
+                    time.sleep(wait_sec)
+                    url = _check_redirect()
+                    if url:
+                        return _save_url(url)
+                    print(f"[OAuth] Waiting for navigation after brand button click ({wait_sec}s passed)...")
+                # Button clicked but no redirect yet — loop will retry
                 continue
 
             # ── b) Consent page: check all checkboxes, then Continue ───────
