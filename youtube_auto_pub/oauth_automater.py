@@ -129,46 +129,113 @@ class GoogleOAuthAutomator:
             
             with BrowserManager(browser_config) as page:
                 page.wait_for_timeout(2000)
-                
+
                 heading_element = page.query_selector("#headingText")
-                if heading_element and heading_element.text_content() != "Choose your account or a brand account":
+                heading_text = heading_element.text_content() if heading_element else ""
+                print(f"[OAuth] Initial page heading: '{heading_text}'")
+
+                if heading_text != "Choose your account or a brand account":
                     email, password = self.get_credentials()
-
                     page.wait_for_timeout(2000)
-                    
-                    # Wait for email input and enter email
-                    print("[OAuth] Looking for email input...")
-                    email_selector = '#identifierId'
-                    page.wait_for_selector(email_selector)
-                    page.fill(email_selector, email)
-                    
-                    # Click next button
-                    next_button = '#identifierNext'
-                    page.wait_for_selector(next_button)
-                    page.click(next_button)
-                    
-                    # Wait for password input and enter password
-                    print("[OAuth] Looking for password input...")
-                    password_selector = 'input[type="password"]'
-                    page.wait_for_selector(password_selector)
-                    page.fill(password_selector, password)
-                    
-                    # Click next/sign in button
-                    signin_button = '#passwordNext'
-                    page.wait_for_selector(signin_button)
-                    page.click(signin_button)
 
-                    # Wait for 2-Step Verification
-                    self._wait_for_2fa(page)
-                    
-                    # Wait for account selection
-                    self._wait_for_account_selection(page)
+                    # Probe for email input — short timeout distinguishes fresh login
+                    # from cached-session account chooser (which has no #identifierId)
+                    email_selector = '#identifierId'
+                    email_input_found = False
+                    try:
+                        page.wait_for_selector(email_selector, timeout=5000)
+                        email_input_found = True
+                    except Exception:
+                        pass
+
+                    if email_input_found:
+                        print("[OAuth] Fresh login — entering email...")
+                        page.fill(email_selector, email)
+
+                        next_button = '#identifierNext'
+                        page.wait_for_selector(next_button)
+                        page.click(next_button)
+
+                        print("[OAuth] Looking for password input...")
+                        password_selector = 'input[type="password"]'
+                        page.wait_for_selector(password_selector)
+                        page.fill(password_selector, password)
+
+                        signin_button = '#passwordNext'
+                        page.wait_for_selector(signin_button)
+                        page.click(signin_button)
+
+                        # Wait for 2-Step Verification
+                        self._wait_for_2fa(page)
+
+                        # Wait for account selection
+                        self._wait_for_account_selection(page)
+                    else:
+                        # Cached session: account chooser shown — click matching account
+                        print(f"[OAuth] Cached session detected — clicking account '{email}'...")
+                        self._click_account_from_chooser(page, email)
 
                 self._handle_account_selection_and_continue(page)
                 return True
                 
         except Exception as e:
             raise ValueError(f"Error during authorization: {e}")
+
+    def _click_account_from_chooser(self, page, email: str) -> bool:
+        """Click the matching account from Google's account chooser (cached-session flow).
+
+        Tries selectors commonly used by Google's account chooser UI.
+        Falls back to clicking the first available account if no email match is found.
+        """
+        import time
+
+        selectors = [
+            f'[data-identifier="{email}"]',   # most reliable: exact email attribute
+            f'[data-email="{email}"]',
+        ]
+        # Try exact-match selectors first
+        for sel in selectors:
+            try:
+                el = page.query_selector(sel)
+                if el:
+                    print(f"[OAuth] Clicking account via selector '{sel}'")
+                    el.click(force=True)
+                    time.sleep(3)
+                    return True
+            except Exception:
+                pass
+
+        # Fallback: iterate list items and match by text content
+        for li_sel in ["ul li", "ol li", "li"]:
+            try:
+                items = page.query_selector_all(li_sel)
+                for item in items:
+                    try:
+                        text = item.inner_text()
+                        if email and email.lower() in text.lower():
+                            print(f"[OAuth] Clicking account list item matching '{email}'")
+                            item.click(force=True)
+                            time.sleep(3)
+                            return True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # Last resort: click the first clickable account item
+        for li_sel in ["ul li", "li"]:
+            try:
+                first = page.query_selector(li_sel)
+                if first:
+                    print(f"[OAuth] Clicking first account item (no email match found)")
+                    first.click(force=True)
+                    time.sleep(3)
+                    return True
+            except Exception:
+                pass
+
+        print("[OAuth] Could not find any account to click in chooser")
+        return False
 
     def _wait_for_2fa(self, page) -> None:
         """Wait for and handle 2-Step Verification if present."""
