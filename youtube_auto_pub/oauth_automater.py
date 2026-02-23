@@ -243,6 +243,60 @@ class GoogleOAuthAutomator:
             print(f"[OAuth] Page interaction loop {i+1}/{max_attempts}")
             time.sleep(10) # Give page time to settle
 
+            # ── Deep diagnostics ──────────────────────────────────────────
+            try:
+                print(f"[OAuth][DEBUG] page.url = {page.url}")
+            except Exception as e:
+                print(f"[OAuth][DEBUG] page.url error: {e}")
+
+            try:
+                heading = page.query_selector("#headingText")
+                print(f"[OAuth][DEBUG] #headingText = {heading.text_content() if heading else 'NOT FOUND'}")
+            except Exception as e:
+                print(f"[OAuth][DEBUG] #headingText error: {e}")
+
+            try:
+                all_buttons = page.query_selector_all("button")
+                print(f"[OAuth][DEBUG] buttons found: {len(all_buttons)}")
+                for b in all_buttons:
+                    try:
+                        btext = b.inner_text().strip()
+                        bdata = b.get_attribute("data-destination-info") or ""
+                        print(f"[OAuth][DEBUG]   button text='{btext}' data-destination-info='{bdata[:80]}'")
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"[OAuth][DEBUG] button scan error: {e}")
+
+            try:
+                form_lis = page.query_selector_all("form li")
+                print(f"[OAuth][DEBUG] form li items: {len(form_lis)}")
+                for li in form_lis:
+                    try:
+                        print(f"[OAuth][DEBUG]   form li text='{li.inner_text()[:80]}'")
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"[OAuth][DEBUG] form li scan error: {e}")
+
+            try:
+                all_lis = page.query_selector_all("li")
+                print(f"[OAuth][DEBUG] all li items: {len(all_lis)}")
+                for li in all_lis[:5]:
+                    try:
+                        print(f"[OAuth][DEBUG]   li text='{li.inner_text()[:80]}'")
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"[OAuth][DEBUG] all li scan error: {e}")
+
+            try:
+                checkboxes = page.query_selector_all('input[type="checkbox"]')
+                print(f"[OAuth][DEBUG] checkboxes: {len(checkboxes)}")
+            except Exception as e:
+                print(f"[OAuth][DEBUG] checkbox scan error: {e}")
+            # ─────────────────────────────────────────────────────────────
+
             # 1. Check for Checkbox inside form (Consent Page)
             # User reported "Select all" label might be missing, so we check first checkbox in form
             form_checkbox = page.query_selector('form input[type="checkbox"]')
