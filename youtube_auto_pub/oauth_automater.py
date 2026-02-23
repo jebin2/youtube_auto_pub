@@ -117,6 +117,18 @@ class GoogleOAuthAutomator:
             )
         
         try:
+            # Clear session cookies so we always get a fresh email/password login.
+            # Cached sessions can be expired/invalid, causing Google to show
+            # "Couldn't sign you in" (authuser=unknown). Clearing forces a clean flow.
+            import os
+            cookies_path = os.path.join(self.config.browser_profile_path, "Default", "Cookies")
+            if os.path.exists(cookies_path):
+                try:
+                    os.remove(cookies_path)
+                    print(f"[OAuth] Cleared session cookies at {cookies_path}")
+                except Exception as e:
+                    print(f"[OAuth] Could not clear cookies: {e}")
+
             browser_config = BrowserConfig()
             browser_config.use_neko = not self.config.is_docker and self.config.has_display
             browser_config.url = auth_url
@@ -126,7 +138,7 @@ class GoogleOAuthAutomator:
             browser_config.user_data_dir = self.config.browser_profile_path
             browser_config.host_network = self.config.host_network
             self.browser_config = browser_config  # Store for use in _capture_url_from_address_bar
-            
+
             with BrowserManager(browser_config) as page:
                 page.wait_for_timeout(2000)
 
