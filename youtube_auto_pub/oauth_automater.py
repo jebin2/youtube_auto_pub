@@ -140,13 +140,13 @@ class GoogleOAuthAutomator:
             self.browser_config = browser_config  # Store for use in _capture_url_from_address_bar
             
             with BrowserManager(browser_config) as page:
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(8000)
                 
                 heading_element = page.query_selector("#headingText")
                 if heading_element and heading_element.text_content() != "Choose your account or a brand account":
                     email, password = self.get_credentials()
 
-                    page.wait_for_timeout(2000)
+                    page.wait_for_timeout(8000)
                     
                     # Wait for email input and enter email
                     print("[OAuth] Looking for email input...")
