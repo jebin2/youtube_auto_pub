@@ -338,15 +338,56 @@ class GoogleOAuthAutomator:
             return False
 
         def _click_brand_account_button() -> bool:
-            """Click the first button with data-destination-info. Returns True if clicked."""
+            """Click the first button with data-destination-info using multiple strategies."""
             try:
                 for button in page.query_selector_all("button"):
                     data_destination = button.get_attribute("data-destination-info")
                     if data_destination and "Choosing an account will redirect you to" in data_destination:
                         btext = button.inner_text().strip()
-                        print(f"[OAuth] Clicking brand account confirm button: '{btext}'")
-                        button.click(force=True)
-                        return True
+                        print(f"[OAuth] Attempting to click brand account button: '{btext}'")
+
+                        # Strategy 1: scroll into view + real mouse click at coordinates
+                        try:
+                            button.scroll_into_view_if_needed()
+                            time.sleep(0.5)
+                            box = button.bounding_box()
+                            if box:
+                                x = box['x'] + box['width'] / 2
+                                y = box['y'] + box['height'] / 2
+                                print(f"[OAuth][DEBUG] Mouse click at ({x:.0f}, {y:.0f}) box={box}")
+                                page.mouse.move(x, y)
+                                time.sleep(0.3)
+                                page.mouse.click(x, y)
+                                print("[OAuth][DEBUG] Strategy 1 (mouse.click) executed")
+                                return True
+                        except Exception as e1:
+                            print(f"[OAuth][DEBUG] Strategy 1 failed: {e1}")
+
+                        # Strategy 2: JS eval click (bypasses pointer-events CSS)
+                        try:
+                            page.evaluate("(el) => el.click()", button)
+                            print("[OAuth][DEBUG] Strategy 2 (JS eval click) executed")
+                            return True
+                        except Exception as e2:
+                            print(f"[OAuth][DEBUG] Strategy 2 failed: {e2}")
+
+                        # Strategy 3: dispatch click event
+                        try:
+                            button.dispatch_event("click")
+                            print("[OAuth][DEBUG] Strategy 3 (dispatch_event) executed")
+                            return True
+                        except Exception as e3:
+                            print(f"[OAuth][DEBUG] Strategy 3 failed: {e3}")
+
+                        # Strategy 4: force=True fallback
+                        try:
+                            button.click(force=True)
+                            print("[OAuth][DEBUG] Strategy 4 (force click) executed")
+                            return True
+                        except Exception as e4:
+                            print(f"[OAuth][DEBUG] Strategy 4 failed: {e4}")
+
+                        break
             except Exception as e:
                 print(f"[OAuth][DEBUG] brand button click error: {e}")
             return False
@@ -416,6 +457,15 @@ class GoogleOAuthAutomator:
             except Exception as e:
                 print(f"[OAuth][DEBUG] body text error: {e}")
 
+            # Dump form HTML so we can see the exact structure of the account chooser
+            try:
+                form = page.query_selector("form")
+                if form:
+                    html = form.inner_html()[:3000]
+                    print(f"[OAuth][DEBUG] form HTML (first 3000):\n{html}")
+            except Exception as e:
+                print(f"[OAuth][DEBUG] form HTML error: {e}")
+
         # ── Initial brand account click ────────────────────────────────────
         if _click_brand_account_button():
             time.sleep(3)
@@ -455,6 +505,28 @@ class GoogleOAuthAutomator:
                 url = _check_redirect()
                 if url:
                     return _save_url(url)
+                # Also try clicking li items as a fallback (different HTML structure)
+                print("[OAuth] Button click didn't navigate — trying li items as fallback")
+                try:
+                    for li in page.query_selector_all("form li"):
+                        try:
+                            li_text = li.inner_text().strip()
+                            print(f"[OAuth][DEBUG] Trying li click: '{li_text[:60]}'")
+                            # Try real mouse click on li
+                            li.scroll_into_view_if_needed()
+                            box = li.bounding_box()
+                            if box:
+                                page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                                time.sleep(0.2)
+                                page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                                time.sleep(3)
+                                url = _check_redirect()
+                                if url:
+                                    return _save_url(url)
+                        except Exception as e:
+                            print(f"[OAuth][DEBUG] li click error: {e}")
+                except Exception as e:
+                    print(f"[OAuth][DEBUG] li iteration error: {e}")
                 continue
 
             # ── b) Consent page: check all checkboxes, then Continue ───────
