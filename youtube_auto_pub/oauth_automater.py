@@ -346,6 +346,15 @@ class GoogleOAuthAutomator:
                         btext = button.inner_text().strip()
                         print(f"[OAuth] Attempting to click brand account button: '{btext}'")
 
+                        # DIAGNOSTIC: print outerHTML to understand DOM structure
+                        try:
+                            html = button.evaluate("el => el.outerHTML")
+                            print(f"[OAuth][DIAG] button outerHTML: {html[:400]}")
+                            parent_html = button.evaluate("el => el.parentElement ? el.parentElement.outerHTML.substring(0, 600) : 'NO PARENT'")
+                            print(f"[OAuth][DIAG] parent outerHTML: {parent_html}")
+                        except Exception as de:
+                            print(f"[OAuth][DIAG] outerHTML error: {de}")
+
                         # Strategy 1: scroll into view + real mouse click at coordinates
                         try:
                             button.scroll_into_view_if_needed()
@@ -354,6 +363,14 @@ class GoogleOAuthAutomator:
                             if box:
                                 x = box['x'] + box['width'] / 2
                                 y = box['y'] + box['height'] / 2
+                                # Verify what element is actually at these coordinates
+                                try:
+                                    elem_info = page.evaluate(
+                                        f"() => {{ const el = document.elementFromPoint({x}, {y}); return el ? el.tagName + ' id=' + el.id + ' class=' + el.className : 'NONE'; }}"
+                                    )
+                                    print(f"[OAuth][DIAG] Element at ({x:.0f}, {y:.0f}): {elem_info}")
+                                except Exception:
+                                    pass
                                 page.mouse.move(x, y)
                                 time.sleep(0.3)
                                 page.mouse.click(x, y)
@@ -386,6 +403,24 @@ class GoogleOAuthAutomator:
                         except Exception as e4:
                             print(f"[OAuth] Strategy 4 (force) failed: {e4}")
 
+                        # Strategy 5: keyboard focus + Enter
+                        try:
+                            button.focus()
+                            time.sleep(0.3)
+                            page.keyboard.press("Enter")
+                            print(f"[OAuth] Clicked '{btext}' via keyboard Enter")
+                            return True
+                        except Exception as e5:
+                            print(f"[OAuth] Strategy 5 (keyboard Enter) failed: {e5}")
+
+                        # Strategy 6: click parent element via JS
+                        try:
+                            page.evaluate("(el) => el.parentElement && el.parentElement.click()", button)
+                            print(f"[OAuth] Clicked '{btext}' parent via JS eval")
+                            return True
+                        except Exception as e6:
+                            print(f"[OAuth] Strategy 6 (parent JS click) failed: {e6}")
+
                         break
             except Exception as e:
                 print(f"[OAuth][DEBUG] brand button click error: {e}")
@@ -416,6 +451,19 @@ class GoogleOAuthAutomator:
                 checkboxes = page.query_selector_all('form input[type="checkbox"]')
                 if checkboxes:
                     print(f"[OAuth]   form checkboxes: {len(checkboxes)}")
+            except Exception:
+                pass
+
+            # Print ALL li items to find where brand accounts are listed
+            try:
+                all_lis = page.query_selector_all("li")
+                if all_lis:
+                    print(f"[OAuth][DIAG] All li items ({len(all_lis)}):")
+                    for li in all_lis:
+                        try:
+                            print(f"[OAuth][DIAG]   li: '{li.inner_text().strip()[:80]}'")
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
