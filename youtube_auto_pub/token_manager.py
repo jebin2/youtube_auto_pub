@@ -88,50 +88,18 @@ class TokenManager:
         )
         print(f"[TokenManager] Encrypted and uploaded {len(local_file_paths)} files successfully.")
 
-    @staticmethod
-    def _env_var_name(file_name: str) -> str:
-        """Derive env var name from a credential filename.
-
-        Examples:
-            ytcredentials.json  -> YTCREDENTIALS_JSON
-            ytartoken.json      -> YTARTOKEN_JSON
-        """
-        return os.path.basename(file_name).upper().replace(".", "_")
-
-    def _write_from_env(self, file_name: str, local_file_path: str) -> bool:
-        """Write credential file from environment variable if available.
-
-        Checks for an env var whose name is derived from the filename.
-        The env var value should be the raw JSON content of the file.
-
-        Returns True if the file was written from the env var.
-        """
-        env_var = self._env_var_name(file_name)
-        content = os.environ.get(env_var)
-        if not content:
-            return False
-        try:
-            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-            with open(local_file_path, "w") as f:
-                f.write(content)
-            print(f"[TokenManager] Wrote {file_name} from env var {env_var}")
-            return True
-        except Exception as e:
-            print(f"[TokenManager] Failed to write {file_name} from env var {env_var}: {e}")
-            return False
-
     def download_and_decrypt(self, file_name: str) -> str:
         """Download encrypted file from HuggingFace Hub and decrypt it.
-
+        
         Args:
             file_name: Name of the file to download (not full path).
-
+            
         Returns:
             Local file path of the decrypted file (may not exist if file
             was not found on HuggingFace Hub - first time setup).
         """
         local_file_path = os.path.join(self.config.encrypt_path, file_name)
-
+        
         try:
             downloaded_path = hf_hub_download(
                 repo_id=self.config.hf_repo_id,
@@ -140,30 +108,20 @@ class TokenManager:
                 token=self.config.hf_token,
                 local_dir=self.config.encrypt_path
             )
-
+            
             fernet = Fernet(self._encryption_key)
             with open(downloaded_path, "rb") as f:
                 data = fernet.decrypt(f.read()).decode("utf-8")
-
+            
             with open(downloaded_path, "w") as f:
                 f.write(data)
-
+            
             print(f"[TokenManager] Downloaded and decrypted: {file_name}")
             return downloaded_path
         except Exception as e:
             # File doesn't exist on HuggingFace Hub (first-time setup)
             print(f"[TokenManager] File not found on HuggingFace Hub: {file_name} ({e})")
-
-            # Fallback: write from environment variable if available
-            env_var = self._env_var_name(file_name)
-            if self._write_from_env(file_name, local_file_path):
-                return local_file_path
-
-            print(
-                f"[TokenManager] Tip: set env var {env_var} to the JSON content of {file_name} "
-                f"to bootstrap without manual file placement."
-            )
-            print(f"[TokenManager] Returning local path: {local_file_path}")
+            print(f"[TokenManager] This is expected for first-time setup. Returning local path: {local_file_path}")
             return local_file_path
 
     @staticmethod
