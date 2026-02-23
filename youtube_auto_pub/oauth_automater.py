@@ -257,9 +257,6 @@ class GoogleOAuthAutomator:
             try:
                 heading = page.query_selector("#headingText")
                 if heading and heading.text_content() == "2-Step Verification":
-                    checkbox = page.query_selector('input[type="checkbox"]')
-                    if checkbox:
-                        checkbox.uncheck()
                     print("[OAuth] Waiting for 2-Step Verification completion...")
                     time.sleep(5)
                     return
