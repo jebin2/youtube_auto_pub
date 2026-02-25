@@ -344,8 +344,8 @@ class YouTubeUploader:
             # GUI mode - use subprocess + browser automation
             cmd = [
                 sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
-                '-c', self.config.client_id_path, 
-                '-t', self.config.token_file_path, 
+                '-c', self.config.client_secret_filename, 
+                '-t', self.config.token_filename, 
                 '-s', ','.join(self.config.scopes),
                 '--code-path', self.config.authorization_code_path
             ]
