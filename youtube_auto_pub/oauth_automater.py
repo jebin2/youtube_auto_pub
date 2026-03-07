@@ -9,14 +9,8 @@ import getpass
 from typing import Optional, Tuple
 
 from youtube_auto_pub.config import YouTubeConfig
-
-# browser_manager is optional - allows manual auth if not available
-try:
-    from browser_manager import BrowserManager
-    from browser_manager.browser_config import BrowserConfig
-    HAS_BROWSER_MANAGER = True
-except ImportError:
-    HAS_BROWSER_MANAGER = False
+from browser_manager import BrowserManager
+from browser_manager.browser_config import BrowserConfig
 
 
 class GoogleOAuthAutomator:
@@ -110,11 +104,6 @@ class GoogleOAuthAutomator:
             ValueError: If browser_manager is not available or authorization fails
             ImportError: If browser_manager package is not installed
         """
-        if not HAS_BROWSER_MANAGER:
-            raise ImportError(
-                "browser_manager package is required for OAuth automation. "
-                "Install with: pip install browser-manager"
-            )
         
         try:
             # Clear session cookies so we always get a fresh email/password login.
