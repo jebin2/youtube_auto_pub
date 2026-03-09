@@ -32,6 +32,7 @@ dependencies = [
     "huggingface_hub>=0.16.0",
     "cryptography>=42.0.0",
     "browser-manager @ git+https://github.com/jebin2/browser_manager.git",
+    "jebin_lib @ git+https://github.com/jebin2/lib.git"
 ]
 
 [project.optional-dependencies]
