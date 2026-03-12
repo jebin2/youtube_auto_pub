@@ -25,7 +25,7 @@ def main():
     # verify remote
     current_remote = run(["git", "remote", "get-url", "origin"], check=False).stdout.strip()
 
-    if "Elvoro" in current_remote:
+    if "Elvoro" not in current_remote:
         die(
             f"Remote mismatch.\n"
             f"  Current: {current_remote}\n"
