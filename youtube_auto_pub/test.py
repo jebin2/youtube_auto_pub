@@ -23,7 +23,7 @@ def main():
         url = re.sub(r"https://[^@]+@", "https://", url)
         return url.rstrip("/").removesuffix(".git").lower()
 
-    if "Elvoro.git" not in current_remote:
+    if "Elvoro" not in current_remote:
         die(f"Remote mismatch.\n  Current: {current_remote}\n  Expected: {remote_url}\nAborting.")
 
     print(f"  → Remote verified: {remote_url}")
