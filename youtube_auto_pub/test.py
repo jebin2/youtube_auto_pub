@@ -62,7 +62,7 @@ def main():
             run(["git", "clean", "-fd"], check=False)
 
             print(f"→ Creating empty commit for '{branch}'")
-            run(["git", "commit", "--allow-empty", "-m", "wipe history"])
+            run(["git", "commit", "--allow-empty", "-m", "test"])
 
             print(f"→ Force pushing to '{branch}'")
 
