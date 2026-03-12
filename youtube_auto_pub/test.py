@@ -27,7 +27,6 @@ def main():
         die(f"Remote mismatch.\n  Current: {current_remote}\n  Expected: {remote_url}\nAborting.")
 
     print(f"  → Remote verified: {remote_url}")
-    exit(0)
     original_branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
 
     for branch in ["main", "feature/video-revamp"]:
