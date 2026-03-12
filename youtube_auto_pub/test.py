@@ -32,7 +32,7 @@ def main():
             f"Aborting."
         )
 
-    print(f"→ Remote verified: {remote_url}")
+    print(f"→ Remote verified: Elvoro")
 
     # configure git identity (required in CI)
     run(["git", "config", "--global", "user.name", "github-actions"])
