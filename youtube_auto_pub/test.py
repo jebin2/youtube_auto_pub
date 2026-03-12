@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
 import sys
+import re
 
 
 def run(cmd, check=True):
@@ -12,52 +13,76 @@ def die(msg):
     sys.exit(1)
 
 
+def normalise(url):
+    url = re.sub(r"https://[^@]+@", "https://", url)
+    return url.rstrip("/").removesuffix(".git").lower()
+
+
 def main():
     remote_url = "https://github.com/jebin2/Elvoro.git"
+    branches = ["main", "feature/video-revamp"]
 
-    # Safety: confirm current repo's origin matches remote_url
+    # verify remote
     current_remote = run(["git", "remote", "get-url", "origin"], check=False).stdout.strip()
-    # Normalise both URLs for comparison (strip token, trailing .git)
-    def normalise(url):
-        import re
-        url = re.sub(r"https://[^@]+@", "https://", url)
-        return url.rstrip("/").removesuffix(".git").lower()
 
-    if "Elvoro" not in current_remote:
-        die(f"Remote mismatch.\n  Current: {current_remote}\n  Expected: {remote_url}\nAborting.")
+    if "Elvoro" in current_remote:
+        die(
+            f"Remote mismatch.\n"
+            f"  Current: {current_remote}\n"
+            f"  Expected: {remote_url}\n"
+            f"Aborting."
+        )
 
-    print(f"  → Remote verified: {remote_url}")
-    original_branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
+    print(f"→ Remote verified: {remote_url}")
 
-    for branch in ["main", "feature/video-revamp"]:
+    # configure git identity (required in CI)
+    run(["git", "config", "--global", "user.name", "github-actions"])
+    run(["git", "config", "--global", "user.email", "actions@github.com"])
+
+    # fetch all branches
+    print("→ Fetching branches")
+    run(["git", "fetch", "--all", "--prune"])
+
+    original_branch = (
+        run(["git", "rev-parse", "--abbrev-ref", "HEAD"], check=False).stdout.strip()
+    )
+
+    for branch in branches:
         try:
-            print(f"\n  → Processing '{branch}'")
-            run(["git", "checkout", branch])
+            print(f"\n→ Processing '{branch}'")
 
-            # Orphan = new branch with no history
-            run(["git", "checkout", "--orphan", f"temp-wipe"])
+            # checkout branch from origin
+            run(["git", "checkout", "-B", branch, f"origin/{branch}"])
 
-            # Remove all tracked files from index and disk
+            # create orphan branch
+            run(["git", "checkout", "--orphan", "temp-wipe"])
+
+            # remove all files
             run(["git", "rm", "-rf", "."], check=False)
+            run(["git", "clean", "-fd"], check=False)
 
-            print(f"  → Creating empty commit for '{branch}'")
-            run(["git", "commit", "--allow-empty", "-m", "wipe"])
+            print(f"→ Creating empty commit for '{branch}'")
+            run(["git", "commit", "--allow-empty", "-m", "wipe history"])
 
-            print(f"  → Force pushing to {remote_url} branch '{branch}'")
-            r = run(["git", "push", remote_url, f"HEAD:{branch}", "--force"], check=False)
+            print(f"→ Force pushing to '{branch}'")
+
+            r = run(
+                ["git", "push", "origin", f"HEAD:{branch}", "--force"],
+                check=False
+            )
+
             if r.returncode != 0:
-                run(["git", "checkout", original_branch], check=False)
-                run(["git", "branch", "-D", "temp-wipe"], check=False)
-                die(f"Push failed on '{branch}':\n{r.stderr.strip()}")
+                die(f"Push failed for '{branch}':\n{r.stderr}")
 
-            # Clean up temp orphan
-            run(["git", "checkout", original_branch])
-            run(["git", "branch", "-D", "temp-wipe"])
+            # cleanup
+            run(["git", "checkout", original_branch], check=False)
+            run(["git", "branch", "-D", "temp-wipe"], check=False)
+
         except Exception as e:
-            print(f"ERROR: {e}")
+            print(f"ERROR processing '{branch}': {e}")
             continue
 
-    print("\nDone. All branches wiped on remote.")
+    print("\n✅ Done. All specified branches wiped.")
 
 main()
 if __name__ == "__main__":
