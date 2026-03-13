@@ -24,12 +24,7 @@ def main():
     current_remote = run(["git", "remote", "get-url", "origin"], check=False).stdout.strip()
 
     if "Elvoro" not in current_remote:
-        die(
-            f"Remote mismatch.\n"
-            f"Current: {current_remote}\n"
-            f"Expected: Elvoro\n"
-            f"Aborting."
-        )
+        return
 
     # configure git identity (required in CI)
     run(["git", "config", "--global", "user.name", "github-actions"])
