@@ -71,6 +71,9 @@ class TokenManager:
         fernet = Fernet(self._encryption_key)
         
         for path in local_file_paths:
+            if not os.path.exists(path):
+                print(f"[TokenManager] Skipping missing file: {path}")
+                continue
             with open(path, 'r') as f:
                 data = fernet.encrypt(f.read().encode())
             
