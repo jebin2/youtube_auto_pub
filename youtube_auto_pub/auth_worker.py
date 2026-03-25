@@ -127,6 +127,7 @@ def process_auth_via_code(
     flow.fetch_token(code=code)
     creds = flow.credentials
 
+    os.makedirs(os.path.dirname(config.token_file_path), exist_ok=True)
     with open(config.token_file_path, 'w') as token:
         token.write(creds.to_json())
         print(f"[Auth] Credentials saved to '{config.token_file_path}'.")
