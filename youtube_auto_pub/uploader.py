@@ -447,6 +447,80 @@ class YouTubeUploader:
 
         return video_id
 
+    def add_end_screen_video(
+        self,
+        service: Any,
+        video_id: str,
+        related_video_id: str,
+    ) -> bool:
+        """Add a related video end screen element to a video.
+
+        Args:
+            service: Authenticated YouTube API service
+            video_id: YouTube video ID to add the end screen to
+            related_video_id: YouTube video ID of the related video to link
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Fetch video duration to calculate end screen timing
+            details = service.videos().list(
+                part='contentDetails',
+                id=video_id
+            ).execute()
+
+            if not details.get('items'):
+                print(f"[Uploader] Could not fetch details for video: {video_id}")
+                return False
+
+            import re
+            iso_duration = details['items'][0]['contentDetails']['duration']
+            match = re.match(
+                r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', iso_duration
+            )
+            if not match:
+                print(f"[Uploader] Could not parse video duration: {iso_duration}")
+                return False
+
+            hours = int(match.group(1) or 0)
+            minutes = int(match.group(2) or 0)
+            seconds = int(match.group(3) or 0)
+            duration_ms = (hours * 3600 + minutes * 60 + seconds) * 1000
+
+            if duration_ms < 25000:
+                print(f"[Uploader] Video too short ({duration_ms}ms) for end screen (min 25s).")
+                return False
+
+            end_offset_ms = duration_ms
+            start_offset_ms = max(duration_ms - 20000, duration_ms - duration_ms + 5000)
+
+            body = {
+                "videoId": video_id,
+                "items": [
+                    {
+                        "endScreenItemType": "VIDEO",
+                        "videoId": related_video_id,
+                        "left": 0.0,
+                        "top": 0.25,
+                        "width": 0.35,
+                        "startOffsetMs": start_offset_ms,
+                        "endOffsetMs": end_offset_ms,
+                    }
+                ],
+            }
+
+            service.videoEndScreens().insert(
+                part="id,snippet",
+                body=body,
+            ).execute()
+
+            print(f"[Uploader] End screen video linked: {related_video_id} -> {video_id}")
+            return True
+        except Exception as e:
+            print(f"[Uploader] Error adding end screen video: {e}")
+            return False
+
     def set_thumbnail(
         self,
         service: Any,
