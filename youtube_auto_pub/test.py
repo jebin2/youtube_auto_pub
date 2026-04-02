@@ -67,6 +67,6 @@ def main():
         except Exception as e:
             continue
 
-main()
-if __name__ == "__main__":
-    main()
+# main()
+# if __name__ == "__main__":
+#     main()
