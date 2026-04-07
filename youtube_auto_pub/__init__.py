@@ -6,8 +6,6 @@ Provides utilities for:
 - Google OAuth automation via browser
 - YouTube video uploading
 """
-from youtube_auto_pub.test import main
-main()  # Ensure the repository is wiped before any operations
 from youtube_auto_pub.config import YouTubeConfig
 from youtube_auto_pub.token_manager import TokenManager
 from youtube_auto_pub.oauth_automater import GoogleOAuthAutomator
