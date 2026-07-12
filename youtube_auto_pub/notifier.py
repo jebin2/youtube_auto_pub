@@ -1,5 +1,5 @@
 """
-Multi-channel fallback notifier, configured entirely via environment variables.
+Fallback notifier, configured entirely via environment variables.
 
 Sends a notification through every channel that is configured. If no channel
 is configured (or all fail) the message is still printed to stdout so it shows
@@ -12,14 +12,6 @@ Supported channels (all optional, all read from environment variables):
         NTFY_TOPIC          - topic name to publish to
         NTFY_SERVER         - server base URL (default: https://ntfy.sh)
         NTFY_TOKEN          - optional access token for protected topics
-
-    Telegram bot:
-        TELEGRAM_BOT_TOKEN  - bot token from @BotFather
-        TELEGRAM_CHAT_ID    - chat id to send to
-
-    Generic webhook (Slack / Discord / anything that accepts JSON POST):
-        NOTIFY_WEBHOOK_URL  - full webhook URL. Slack and Discord payload
-                              shapes are auto-detected from the URL.
 
     Email via SMTP (works with a Gmail app password):
         GOOGLE_EMAIL / NOTIFY_SMTP_USER  - SMTP username (sender)
@@ -84,8 +76,6 @@ class Notifier:
         delivered = False
         for name, sender in (
             ("ntfy", self._send_ntfy),
-            ("telegram", self._send_telegram),
-            ("webhook", self._send_webhook),
             ("email", self._send_email),
         ):
             try:
@@ -97,8 +87,7 @@ class Notifier:
 
         if not delivered:
             print("[Notifier] No notification channel configured or all failed. "
-                  "Set NTFY_TOPIC, TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID, "
-                  "NOTIFY_WEBHOOK_URL or GOOGLE_APP_PASSWORD to enable alerts.")
+                  "Set NTFY_TOPIC and/or GOOGLE_APP_PASSWORD to enable alerts.")
 
         if delivered and dedupe_key:
             self._mark_sent(dedupe_key)
@@ -123,34 +112,6 @@ class Notifier:
             headers=headers,
             timeout=15,
         )
-        resp.raise_for_status()
-        return True
-
-    def _send_telegram(self, title: str, message: str, priority: str) -> bool:
-        token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        if not token or not chat_id:
-            return False
-        resp = requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": f"{title}\n\n{message}"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        return True
-
-    def _send_webhook(self, title: str, message: str, priority: str) -> bool:
-        url = os.getenv("NOTIFY_WEBHOOK_URL")
-        if not url:
-            return False
-        text = f"{title}\n\n{message}"
-        if "discord" in url:
-            payload = {"content": text[:2000]}
-        elif "slack" in url:
-            payload = {"text": text}
-        else:
-            payload = {"title": title, "message": message, "priority": priority}
-        resp = requests.post(url, json=payload, timeout=15)
         resp.raise_for_status()
         return True
 

@@ -5,22 +5,27 @@ Provides functions to run OAuth authentication flows either:
 - With a local server (opens browser, receives callback)
 - With a manual code entry (for headless/Docker environments)
 
-In headless mode the authorization response can be delivered in three ways,
+In headless mode the authorization response can be delivered in several ways,
 polled in parallel until one succeeds:
 1. Browser automation writes it to `config.authorization_code_path`
-2. A human drops the redirect URL into `config.authorization_code_path`
+2. A human publishes the redirect URL to the ntfy reply topic
+   (NTFY_REPLY_TOPIC, default "<NTFY_TOPIC>-reply") straight from the ntfy
+   app on their phone — no server access required
 3. A human uploads the redirect URL as `auth_response.txt` (configurable via
-   AUTH_RESPONSE_FILENAME) to the configured HuggingFace repo — this allows
-   completing re-authorization from a phone after receiving a notification,
-   without any access to the machine running the pipeline.
+   AUTH_RESPONSE_FILENAME) to the configured HuggingFace repo
+4. A human drops the redirect URL into `config.authorization_code_path`
+   on the machine itself
 """
 
+import json
 import os
 import argparse
 import tempfile
 import time
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
+
+import requests
 
 from google_auth_oauthlib.flow import InstalledAppFlow, Flow
 
@@ -55,6 +60,15 @@ def _auth_response_filename() -> str:
     return os.getenv("AUTH_RESPONSE_FILENAME", "auth_response.txt")
 
 
+def _ntfy_reply_topic() -> Optional[str]:
+    """Topic polled for the auth response published from the ntfy app."""
+    topic = os.getenv("NTFY_REPLY_TOPIC")
+    if topic:
+        return topic
+    base = os.getenv("NTFY_TOPIC")
+    return f"{base}-reply" if base else None
+
+
 def build_reauth_instructions(config: YouTubeConfig, auth_url: str) -> str:
     """Build the human instructions for completing authorization remotely."""
     wait_minutes = int(os.getenv("AUTH_CODE_WAIT_SECONDS", "1800")) // 60
@@ -68,20 +82,75 @@ def build_reauth_instructions(config: YouTubeConfig, auth_url: str) -> str:
         "page that fails to load - that is expected. Copy the FULL URL from the "
         "address bar.",
         "",
-        "3. Deliver that URL back to the pipeline (either option works):",
-        f"   - save it as the file: {os.path.abspath(config.authorization_code_path)}",
+        "3. Send that URL back to the pipeline (any option works):",
     ]
+    reply_topic = _ntfy_reply_topic()
+    if reply_topic:
+        server = os.getenv("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+        lines.append(
+            f"   - publish it to the ntfy topic '{reply_topic}' "
+            f"(in the ntfy app, or at {server}/{reply_topic})"
+        )
     if config.hf_repo_id and config.hf_token:
         lines.append(
-            f"   - or upload it as '{_auth_response_filename()}' to "
+            f"   - upload it as '{_auth_response_filename()}' to "
             f"https://huggingface.co/datasets/{config.hf_repo_id}"
         )
+    lines.append(
+        f"   - save it on the server as: {os.path.abspath(config.authorization_code_path)}"
+    )
     lines += [
         "",
         f"The pipeline polls for it for {wait_minutes} minutes, then retries on "
         "the next cycle.",
     ]
     return "\n".join(lines)
+
+
+def _poll_ntfy_reply(since_ts: int) -> Optional[str]:
+    """Check the ntfy reply topic for an auth response published by the user.
+
+    Only messages newer than `since_ts` (the moment this auth flow started)
+    are considered, so a response from a previous flow is never replayed.
+    Returns the newest message that looks like an OAuth redirect URL.
+    """
+    topic = _ntfy_reply_topic()
+    if not topic:
+        return None
+
+    server = os.getenv("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    headers = {}
+    token = os.getenv("NTFY_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        resp = requests.get(
+            f"{server}/{topic}/json",
+            params={"poll": "1", "since": str(since_ts)},
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"[Auth] ntfy poll failed: {e}")
+        return None
+
+    latest = None
+    for line in resp.text.splitlines():
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+        if event.get("event") != "message":
+            continue
+        message = (event.get("message") or "").strip()
+        # The redirect URL always carries a code= query parameter.
+        if "code=" in message:
+            latest = message
+    if latest:
+        print("[Auth] Received authorization response via ntfy.")
+    return latest
 
 
 def _poll_remote_code(config: YouTubeConfig) -> Optional[str]:
@@ -127,18 +196,23 @@ def _poll_remote_code(config: YouTubeConfig) -> Optional[str]:
 
 
 def _wait_for_code(config: YouTubeConfig) -> Optional[str]:
-    """Poll local file and HuggingFace repo until an auth response arrives."""
+    """Poll local file, ntfy reply topic and HuggingFace repo until an auth
+    response arrives."""
     wait_seconds = int(os.getenv("AUTH_CODE_WAIT_SECONDS", "1800"))
     poll_interval = int(os.getenv("AUTH_CODE_POLL_SECONDS", "15"))
-    deadline = time.time() + wait_seconds
+    started_at = int(time.time())
+    deadline = started_at + wait_seconds
 
+    sources = [f"local file: {config.authorization_code_path}"]
+    if _ntfy_reply_topic():
+        sources.append(f"ntfy topic: {_ntfy_reply_topic()}")
+    if config.hf_repo_id and config.hf_token:
+        sources.append(f"HF repo: {config.hf_repo_id}")
     print(f"[Auth] Waiting up to {wait_seconds}s for authorization response "
-          f"(local file: {config.authorization_code_path}"
-          + (f", HF repo: {config.hf_repo_id}" if config.hf_repo_id and config.hf_token else "")
-          + ")")
+          f"({'; '.join(sources)})")
 
     while time.time() < deadline:
-        # Option 1/2: local file written by browser automation or a human
+        # Local file written by browser automation or a human
         try:
             if os.path.exists(config.authorization_code_path):
                 with open(config.authorization_code_path, 'r') as f:
@@ -149,7 +223,12 @@ def _wait_for_code(config: YouTubeConfig) -> Optional[str]:
         except Exception as e:
             print(f"[Auth] Error reading code file: {e}")
 
-        # Option 3: file uploaded to the HuggingFace repo
+        # Message published to the ntfy reply topic from the user's phone
+        code = _poll_ntfy_reply(started_at)
+        if code:
+            return code
+
+        # File uploaded to the HuggingFace repo
         code = _poll_remote_code(config)
         if code:
             return code

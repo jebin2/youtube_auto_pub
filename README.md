@@ -6,7 +6,7 @@ A standalone Python package for YouTube API automation with encrypted credential
 
 - **YouTubeUploader**: Complete video upload with thumbnails, resumable uploads, retry with backoff, and progress tracking
 - **TokenManager**: Encrypted credential storage via HuggingFace Hub using Fernet encryption
-- **Notifier**: Env-configured fallback notifications (ntfy.sh, Telegram, webhook, Gmail app-password email)
+- **Notifier**: Env-configured fallback notifications (ntfy.sh push + Gmail app-password email)
 - **GoogleOAuthAutomator**: Automated browser-based OAuth2 authentication with 2FA support
 - **Remote re-auth**: When re-authorization is ever needed, you get a notification with a link; approve from your phone and upload the response to your HuggingFace repo — no server access required
 - **YouTubeConfig**: Fully configurable settings via dataclass
@@ -146,11 +146,14 @@ export GOOGLE_PASSWORD="your_google_password"
 
 # Notifications (configure at least one channel for unattended operation)
 export NTFY_TOPIC="my-yt-pipeline"                  # push via https://ntfy.sh (zero signup)
-export TELEGRAM_BOT_TOKEN="123:abc"                 # Telegram bot
-export TELEGRAM_CHAT_ID="123456"
-export NOTIFY_WEBHOOK_URL="https://hooks.slack..."  # Slack/Discord/any JSON webhook
 export GOOGLE_APP_PASSWORD="abcd efgh ijkl mnop"    # Gmail app password -> email alerts
 export NOTIFY_EMAIL_TO="you@example.com"            # defaults to GOOGLE_EMAIL
+
+# ntfy extras (all optional)
+export NTFY_SERVER="https://ntfy.sh"     # point at your own server if self-hosting
+export NTFY_TOKEN="tk_..."               # access token for protected topics
+export NTFY_REPLY_TOPIC="my-yt-reply"    # topic polled for auth responses
+                                         # (default: "<NTFY_TOPIC>-reply")
 
 # Tuning (all optional)
 export NOTIFY_DEDUPE_SECONDS=3600    # suppress duplicate alerts within this window
@@ -163,10 +166,11 @@ export UPLOAD_MAX_RETRIES=5          # retries for transient upload errors
 ## Notifications & remote re-authorization
 
 `Notifier` sends alerts through **every channel configured via env vars** and
-mirrors everything to stdout. Channels: [ntfy.sh](https://ntfy.sh) (easiest —
-install the app, pick a topic name, set `NTFY_TOPIC`, done), Telegram bot,
-generic webhook (Slack/Discord payloads auto-detected), and email via Gmail
-app password.
+mirrors everything to stdout. Channels: [ntfy.sh](https://ntfy.sh) push
+(easiest — install the app, subscribe to a topic name, set `NTFY_TOPIC`,
+done) and email via Gmail app password. Use a random, unguessable topic name
+(e.g. `yt-pub-9f3kq1`) since hosted ntfy topics are open to anyone who knows
+the name — or self-host and set `NTFY_SERVER`/`NTFY_TOKEN`.
 
 You get alerted when:
 
@@ -181,15 +185,26 @@ You get alerted when:
 
 If re-authorization is ever needed on a headless server:
 
-1. You receive a notification containing the Google consent URL. Open it and
-   approve.
+1. You receive a push notification containing the Google consent URL. Open it
+   and approve.
 2. The browser redirects to `http://localhost/...` which fails to load —
    expected. Copy that full URL from the address bar.
-3. Upload it as `auth_response.txt` to your HuggingFace token repo (or write
-   it to the configured `authorization_code_path` on the server).
-4. The pipeline (which polls for up to `AUTH_CODE_WAIT_SECONDS`) picks it up,
-   completes the token exchange, deletes the file, and notifies you of
-   success. Publishing resumes automatically.
+3. Send it back to the pipeline — any of these works, first one wins:
+   - **ntfy (easiest):** publish the URL as a message to your reply topic
+     (default `<NTFY_TOPIC>-reply`) — in the ntfy app tap the topic and use
+     the publish field, or open `https://ntfy.sh/<reply-topic>` in a browser,
+     or `curl -d "<url>" ntfy.sh/<reply-topic>`
+   - upload it as `auth_response.txt` to your HuggingFace token repo
+   - write it to the configured `authorization_code_path` on the server
+4. The pipeline (which polls all sources for up to `AUTH_CODE_WAIT_SECONDS`)
+   picks it up, completes the token exchange, and notifies you of success.
+   Publishing resumes automatically.
+
+The reply message is only accepted if it arrived *after* the current auth
+flow started and contains an OAuth `code=` parameter, so stale or accidental
+messages on the topic are ignored. The authorization code itself is
+single-use and expires within minutes, and exchanging it also requires your
+client secret — but still keep the reply topic name unguessable.
 
 ## Components
 
