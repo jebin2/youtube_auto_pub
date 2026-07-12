@@ -1,14 +1,13 @@
 # YouTube Auto Publisher
 
-A standalone Python package for YouTube API automation with encrypted credential management and browser-based OAuth.
+A standalone Python package for YouTube API automation with encrypted credential management and notification-based OAuth (no browser automation).
 
 ## Features
 
 - **YouTubeUploader**: Complete video upload with thumbnails, resumable uploads, retry with backoff, and progress tracking
 - **TokenManager**: Encrypted credential storage via HuggingFace Hub using Fernet encryption
 - **Notifier**: Env-configured fallback notifications (ntfy.sh push + Gmail app-password email)
-- **GoogleOAuthAutomator**: Automated browser-based OAuth2 authentication with 2FA support
-- **Remote re-auth**: When re-authorization is ever needed, you get a notification with a link; approve from your phone and upload the response to your HuggingFace repo — no server access required
+- **Remote re-auth**: When re-authorization is ever needed, you get a notification with a link; approve from your phone and reply via the ntfy app (or a HuggingFace upload) — no server access required
 - **YouTubeConfig**: Fully configurable settings via dataclass
 
 ## Why not a service account?
@@ -76,16 +75,15 @@ config = YouTubeConfig(
     hf_repo_id="username/my-tokens",
     hf_token="hf_your_token",  # or set HF_TOKEN env var
     encryption_key="your-fernet-key",  # or pass bytes
+    client_secret_filename="ytcredentials.json",
+    token_filename="yttoken.json",
 )
 
 # Create uploader
 uploader = YouTubeUploader(config)
 
 # Get authenticated service (handles token refresh and re-auth automatically)
-service = uploader.get_service(
-    token_path="yttoken.json",
-    client_path="ytcredentials.json"
-)
+service = uploader.get_service()
 
 # Upload video with metadata
 metadata = VideoMetadata(
@@ -123,15 +121,8 @@ The `YouTubeConfig` dataclass accepts the following parameters:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `encrypt_path` | `"./encrypt"` | Directory for encrypted credentials |
-| `authorization_code_path` | `"./code.txt"` | OAuth code file for headless mode |
-| `browser_executable` | `None` | Browser path (None = system default) |
-| `browser_profile_path` | `~/.youtube_auto_pub_browser_profile` | Browser profile directory |
-| `is_docker` | `False` | Set to `True` when running in Docker container |
-| `has_display` | `True` | Set to `False` if no display is available |
-| `headless_mode` | Auto-computed | Run browser headless (computed from `is_docker` or `has_display` if not set) |
+| `authorization_code_path` | `"./code.txt"` | OAuth code file for unattended mode |
 | `hf_repo_type` | `"dataset"` | HuggingFace Hub repository type |
-| `docker_name` | `"youtube_auto_pub"` | Name for Docker container (used by browser_manager) |
-| `host_network` | `True` | Whether to use host network in Docker |
 
 ## Environment Variables
 
@@ -139,10 +130,6 @@ The `YouTubeConfig` dataclass accepts the following parameters:
 # Required
 export HF_TOKEN="hf_your_huggingface_token"
 export ENCRYPT_KEY="your-fernet-encryption-key"
-
-# Optional for OAuth browser automation
-export GOOGLE_EMAIL="your@gmail.com"
-export GOOGLE_PASSWORD="your_google_password"
 
 # Notifications (configure at least one channel for unattended operation)
 export NTFY_TOPIC="my-yt-pipeline"                  # push via https://ntfy.sh (zero signup)
@@ -154,13 +141,6 @@ export NTFY_SERVER="https://ntfy.sh"     # point at your own server if self-host
 export NTFY_TOKEN="tk_..."               # access token for protected topics
 export NTFY_REPLY_TOPIC="my-yt-reply"    # topic polled for auth responses
                                          # (default: "<NTFY_TOPIC>-reply")
-
-# Authorization flow
-export AUTH_MODE=notify              # "notify" = never launch a browser: send the
-                                     # consent URL as a notification and wait for the
-                                     # redirect URL via ntfy reply / HF upload / file.
-                                     # "auto" (default) = browser automation when a
-                                     # display is available, else same as notify.
 
 # Tuning (all optional)
 export NOTIFY_DEDUPE_SECONDS=3600    # suppress duplicate alerts within this window
@@ -182,15 +162,15 @@ the name — or self-host and set `NTFY_SERVER`/`NTFY_TOKEN`.
 You get alerted when:
 
 - the refresh token is permanently rejected (`invalid_grant`) and re-auth starts
-- (re)authorization is required and browser automation failed — the alert
-  contains the auth URL and instructions
+- (re)authorization is required — the alert contains the auth URL and
+  instructions
 - authorization succeeds again
 - token refresh keeps failing for transient reasons (network/Google outage)
 - a video upload fails after all retries
 
 ### Completing re-auth from your phone
 
-If re-authorization is ever needed on a headless server:
+If re-authorization is ever needed on an unattended server:
 
 1. You receive a push notification containing the Google consent URL. Open it
    and approve.
@@ -242,15 +222,6 @@ local_path = tm.download_and_decrypt("yttoken.json")
 tm.encrypt_and_upload(["yttoken.json", "ytcredentials.json"])
 ```
 
-### GoogleOAuthAutomator
-
-Browser automation for OAuth:
-
-```python
-automator = GoogleOAuthAutomator(config=config)
-automator.authorize_oauth("https://accounts.google.com/o/oauth2/auth?...")
-```
-
 ## Integration Example
 
 For CaptionCreator-style integration:
@@ -262,9 +233,6 @@ import custom_env  # Your project's config
 
 config = YouTubeConfig(
     encrypt_path=custom_env.ENCRYPT_PATH,
-    browser_executable=custom_env.BROWSER_EXECUTABLE,
-    browser_profile_path=custom_env.BROWSER_PROFILE,
-    is_docker=custom_env.IS_DOCKER,
     # Required parameters from environment
     encryption_key=os.getenv("ENCRYPT_KEY").encode(),  # bytes
     hf_repo_id=os.getenv("HF_REPO_ID"),

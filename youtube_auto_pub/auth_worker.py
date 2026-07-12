@@ -3,17 +3,16 @@ Authentication Worker for Google OAuth2 flows.
 
 Provides functions to run OAuth authentication flows either:
 - With a local server (opens browser, receives callback)
-- With a manual code entry (for headless/Docker environments)
+- With a manual code entry (for unattended/remote environments)
 
-In headless mode the authorization response can be delivered in several ways,
-polled in parallel until one succeeds:
-1. Browser automation writes it to `config.authorization_code_path`
-2. A human publishes the redirect URL to the ntfy reply topic
+In unattended mode the authorization response can be delivered in several
+ways, polled in parallel until one succeeds:
+1. A human publishes the redirect URL to the ntfy reply topic
    (NTFY_REPLY_TOPIC, default "<NTFY_TOPIC>-reply") straight from the ntfy
    app on their phone — no server access required
-3. A human uploads the redirect URL as `auth_response.txt` (configurable via
+2. A human uploads the redirect URL as `auth_response.txt` (configurable via
    AUTH_RESPONSE_FILENAME) to the configured HuggingFace repo
-4. A human drops the redirect URL into `config.authorization_code_path`
+3. A human drops the redirect URL into `config.authorization_code_path`
    on the machine itself
 """
 
@@ -212,7 +211,7 @@ def _wait_for_code(config: YouTubeConfig) -> Optional[str]:
           f"({'; '.join(sources)})")
 
     while time.time() < deadline:
-        # Local file written by browser automation or a human
+        # Local file written by a human with access to the machine
         try:
             if os.path.exists(config.authorization_code_path):
                 with open(config.authorization_code_path, 'r') as f:
@@ -246,7 +245,7 @@ def process_auth_via_code(
 ) -> str:
     """Run OAuth flow with manual code entry.
 
-    Designed for headless/Docker environments where a browser cannot be
+    Designed for unattended/remote environments where a browser cannot be
     opened directly. Prints an authorization URL, optionally notifies the
     user through the configured notification channels, and waits for the
     authorization response (local file, HuggingFace upload, or interactive
@@ -390,7 +389,7 @@ if __name__ == "__main__":
         token_filename=args.token,
         scopes=scopes,
         authorization_code_path=args.code_path,
-        # Allow the subprocess to poll the HuggingFace repo for a remotely
+        # Allow the CLI to poll the HuggingFace repo for a remotely
         # uploaded auth response (env vars are inherited from the parent).
         hf_repo_id=os.getenv("HF_YT_CRED_REPO_ID") or os.getenv("HF_REPO_ID") or "",
         hf_token=os.getenv("HF_TOKEN"),

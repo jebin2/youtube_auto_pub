@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "youtube-auto-pub"
-version = "0.2.0"
+version = "0.3.0"
 description = "A standalone package for YouTube API automation with encrypted credential management"
 readme = "README.md"
 license = {text = "MIT"}
@@ -31,9 +31,7 @@ dependencies = [
     "google-api-python-client==2.118.0",
     "huggingface_hub>=0.16.0",
     "cryptography>=42.0.0",
-    "requests>=2.28.0",
-    "browser-manager @ git+https://github.com/jebin2/browser_manager.git",
-    "jebin_lib @ git+https://github.com/jebin2/lib.git"
+    "requests>=2.28.0"
 ]
 
 [project.optional-dependencies]

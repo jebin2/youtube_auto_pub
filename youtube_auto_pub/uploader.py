@@ -11,7 +11,6 @@ import os
 import json
 import time
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -402,95 +401,24 @@ class YouTubeUploader:
     def _run_auth_flow(self) -> Credentials:
         """Run OAuth authentication flow.
 
-        The flow is selected by the AUTH_MODE environment variable:
-            notify - never launch a browser. Send the consent URL through the
-                     configured notification channels and wait for the human
-                     to send the redirect URL back (ntfy reply topic,
-                     HuggingFace upload, or local file).
-            auto   - (default) browser automation when a display is available,
-                     otherwise the same notification flow as "notify".
+        When an interactive terminal is attached, the consent URL is printed
+        and the redirect URL is read from stdin (one-time setup). Otherwise
+        the URL is delivered through the configured notification channels and
+        the redirect URL is awaited via the ntfy reply topic, a HuggingFace
+        upload, or a local file. No browser is ever launched by this package.
 
         Returns:
             Authenticated credentials
         """
         from youtube_auto_pub.auth_worker import process_auth_via_code
 
-        auth_mode = os.getenv("AUTH_MODE", "auto").strip().lower()
-        if auth_mode == "notify":
-            print("[Uploader] AUTH_MODE=notify - skipping browser automation, "
-                  "using notification-based authorization.")
-            process_auth_via_code(self.config, prompt=False, notifier=self.notifier)
-            return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
-
-        if self.config.headless_mode:
-            # Headless mode - use code-based auth. Only prompt on stdin when a
-            # human is actually attached; otherwise wait for the response via
-            # file or HuggingFace upload (unattended servers must never block
-            # on input()).
-            interactive = (not self.config.is_docker) and sys.stdin.isatty()
-            process_auth_via_code(
-                self.config,
-                prompt=interactive,
-                notifier=None if interactive else self.notifier
-            )
-            return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
-        else:
-            # GUI mode - use subprocess + browser automation
-            from youtube_auto_pub.oauth_automater import GoogleOAuthAutomator
-
-            cmd = [
-                sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker',
-                '-c', self.config.client_id_path,
-                '-t', self.config.token_file_path,
-                '-s', ','.join(self.config.scopes),
-                '--code-path', self.config.authorization_code_path,
-                # File mode: the subprocess polls for the auth response instead
-                # of running a local callback server (more stable in remote and
-                # containerised environments).
-                '--file-mode'
-            ]
-
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env={**os.environ, 'PYTHONUNBUFFERED': '1'}
-            )
-            
-            def _automate_or_notify(auth_url: str) -> None:
-                """Try browser automation; on failure alert a human so they
-                can complete authorization manually (the subprocess keeps
-                polling for the response file / HuggingFace upload)."""
-                try:
-                    automator = GoogleOAuthAutomator(config=self.config)
-                    automator.authorize_oauth(auth_url)
-                except Exception as e:
-                    print(f"[Uploader] Browser automation failed: {e}")
-                    from youtube_auto_pub.auth_worker import build_reauth_instructions
-                    self.notifier.notify(
-                        title="YouTube authorization required (automation failed)",
-                        message=build_reauth_instructions(self.config, auth_url),
-                        priority="urgent",
-                        dedupe_key="yt-auth-required",
-                    )
-
-            for line in process.stdout:
-                print(f"[Auth] {line.strip()}")  # Debug output
-                # Check for both formats
-                if "Please visit this URL to authorize this application:" in line:
-                    # Format: Please visit this URL to authorize this application: https://...
-                    _automate_or_notify(f'https://{line.strip().split("https://")[-1]}')
-                elif "authorization_url####" in line:
-                    # Format: authorization_url####https://...
-                    _automate_or_notify(line.strip().split("####")[-1])
-                elif "Credentials saved to" in line:
-                    return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
-            
-            # Wait for process to complete
-            process.wait()
-            return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
+        interactive = sys.stdin.isatty()
+        process_auth_via_code(
+            self.config,
+            prompt=interactive,
+            notifier=None if interactive else self.notifier
+        )
+        return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
 
     def upload_video(
         self,
