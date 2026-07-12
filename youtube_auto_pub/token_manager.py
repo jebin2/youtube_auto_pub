@@ -83,11 +83,19 @@ class TokenManager:
                 f.write(data)
         
         api = HfApi(token=self.config.hf_token)
+        # First-time setup: create the (private) repo if it does not exist yet.
+        api.create_repo(
+            repo_id=self.config.hf_repo_id,
+            repo_type=self.config.hf_repo_type,
+            private=True,
+            exist_ok=True,
+        )
         api.upload_folder(
             folder_path=self.config.encrypt_path,
             repo_id=self.config.hf_repo_id,
             repo_type=self.config.hf_repo_type,
-            commit_message="Upload encrypted credentials"
+            commit_message="Upload encrypted credentials",
+            ignore_patterns=[".cache*", "*.lock"],
         )
         print(f"[TokenManager] Encrypted and uploaded {len(local_file_paths)} files successfully.")
 
