@@ -27,8 +27,15 @@ class TokenManager:
         self._create_directory(self.config.encrypt_path)
         self._empty_directory(self.config.encrypt_path)
 
-        if not self.config.encryption_key:
-            raise ValueError("encryption_key is required in config or ENCRYPT_KEY env var")
+        missing = [
+            name for name, value in (
+                ("HF_YT_CRED_REPO_ID (config: hf_repo_id)", config.hf_repo_id),
+                ("HF_TOKEN (config: hf_token)", config.hf_token),
+                ("ENCRYPT_KEY (config: encryption_key)", config.encryption_key),
+            ) if not value
+        ]
+        if missing:
+            raise ValueError(f"Missing required configuration: {', '.join(missing)}")
 
         self._encryption_key = (
             self.config.encryption_key.encode()

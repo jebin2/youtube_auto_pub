@@ -8,25 +8,11 @@ import os
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
-from google_auth_oauthlib.flow import InstalledAppFlow, Flow
+from google_auth_oauthlib.flow import Flow
 
 from youtube_auto_pub.config import YouTubeConfig
 from youtube_auto_pub.auth import receivers
 from youtube_auto_pub.auth.instructions import build_reauth_instructions
-
-
-def run_local_server_flow(config: YouTubeConfig) -> None:
-    """Interactive flow with a local callback server (desktop machines)."""
-    flow = InstalledAppFlow.from_client_secrets_file(config.client_id_path, config.scopes)
-    creds = flow.run_local_server(
-        port=0,
-        access_type='offline',
-        prompt='consent',
-        include_granted_scopes='true',
-        open_browser=False,
-        authorization_prompt_message="Please visit this URL to authorize this application: {url}"
-    )
-    _save_token(config, creds)
 
 
 def run_code_flow(config: YouTubeConfig, prompt: bool = False, notifier=None) -> str:

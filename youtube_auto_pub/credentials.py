@@ -52,13 +52,9 @@ def token_matches_client(token_path: str, client_id: str) -> bool:
 
 def _candidate_client_paths(config: YouTubeConfig) -> list:
     """Places a local (possibly newer) client secret may live."""
-    filename = config.client_secret_filename
-    paths = [filename]  # current working directory
-    if config.project_path:
-        paths.append(os.path.join(config.project_path, filename))
+    paths = [config.client_secret_filename]  # current working directory
     if config.local_client_secret_path:
         paths.append(config.local_client_secret_path)
-    paths.append(os.path.join('/app', filename))  # Docker-mounted files
     return paths
 
 

@@ -44,43 +44,31 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
    huggingface.co/settings/tokens. The dataset repo for credentials is
    created automatically (private) on first run — just pick a name.
 
-**4. First run** — place `ytcredentials.json` in the working directory and
-   set the env vars below. There is no token yet, so the auth flow starts:
-
-   - *With a terminal:* the consent URL is printed; open it, approve, paste
-     the final `http://localhost/...` redirect URL back.
-   - *Unattended (no terminal at all):* the consent URL arrives as a push
-     notification; approve on your phone and publish the redirect URL to
-     your ntfy reply topic (see below).
-
-   Either way the tokens are then encrypted and uploaded to the HF repo
-   automatically. You can delete the local `ytcredentials.json` afterwards —
-   every future machine only needs the env vars.
-
-Standalone one-time auth (without running your pipeline):
+**4. Authorize** — with `ytcredentials.json` in the working directory and the
+   env vars below set, run:
 
 ```bash
-python -m youtube_auto_pub.auth \
-    -c ./encrypt/ytcredentials.json -t ./encrypt/yttoken.json \
-    -s "https://www.googleapis.com/auth/youtube.upload,https://www.googleapis.com/auth/youtube,https://www.googleapis.com/auth/youtube.force-ssl,https://www.googleapis.com/auth/userinfo.email" \
-    --prompt
+python -m youtube_auto_pub.auth --prompt
 ```
 
+   Open the printed URL, approve, paste the final `http://localhost/...`
+   redirect URL back. The credentials are encrypted and uploaded to the HF
+   repo (created private if missing) in the same command. Delete the local
+   `ytcredentials.json` afterwards — every future machine only needs the
+   env vars.
+
+   (No terminal at all? Skip this step and just start your pipeline: the
+   consent URL arrives as a push notification and you reply via the ntfy
+   app — same flow as re-authorization, described below.)
+
 ## Usage
+
+Credentials come from the environment — no arguments needed:
 
 ```python
 from youtube_auto_pub import YouTubeConfig, YouTubeUploader, VideoMetadata
 
-config = YouTubeConfig(
-    encrypt_path="./my_credentials",
-    hf_repo_id="username/my-tokens",
-    hf_token="hf_...",
-    encryption_key="your-fernet-key",
-    client_secret_filename="ytcredentials.json",
-    token_filename="yttoken.json",
-)
-
-uploader = YouTubeUploader(config)
+uploader = YouTubeUploader(YouTubeConfig())
 service = uploader.get_service()  # refresh / re-auth handled automatically
 
 video_id = uploader.upload_video(
@@ -102,6 +90,7 @@ video_id = uploader.upload_video(
 | Variable | Required | Description |
 |---|---|---|
 | `HF_TOKEN` | yes | HuggingFace token (write access) |
+| `HF_YT_CRED_REPO_ID` | yes | HuggingFace dataset repo for encrypted credentials (e.g. `username/yt-tokens`) |
 | `ENCRYPT_KEY` | yes | Fernet key for credential encryption |
 | `NTFY_TOPIC` | recommended | [ntfy.sh](https://ntfy.sh) topic for push alerts — install the app, subscribe to an unguessable name (e.g. `yt-pub-9f3kq1`) |
 | `GOOGLE_EMAIL` + `GOOGLE_APP_PASSWORD` | optional | Gmail app password → email alerts as backup channel |
@@ -155,17 +144,18 @@ youtube_auto_pub/
 
 ## YouTubeConfig reference
 
+Every field is optional — credentials fall back to the environment
+(`HF_YT_CRED_REPO_ID`, `HF_TOKEN`, `ENCRYPT_KEY`):
+
 | Parameter | Default | Description |
 |---|---|---|
-| `encryption_key` | — | **Required.** Fernet key (`str` or `bytes`) |
-| `hf_repo_id` | — | **Required.** HF dataset repo for tokens |
-| `hf_token` | — | **Required.** HF API token |
-| `client_secret_filename` | — | **Required.** e.g. `ytcredentials.json` |
-| `token_filename` | — | **Required.** e.g. `yttoken.json` |
+| `client_secret_filename` | `ytcredentials.json` | Client secret file name (per channel) |
+| `token_filename` | `yttoken.json` | Token file name (per channel) |
 | `encrypt_path` | `./encrypt` | Working dir for (de)crypted files |
 | `authorization_code_path` | `./code.txt` | Local auth-response file |
+| `hf_repo_id` / `hf_token` / `encryption_key` | from env | Override the env values |
 | `hf_repo_type` | `dataset` | HF repo type |
-| `project_path` / `local_client_secret_path` | `None` | Extra locations searched for a local client secret |
+| `local_client_secret_path` | `None` | Extra location searched for a local client secret |
 | `scopes` | YouTube upload/manage | OAuth scopes |
 
 ## License
