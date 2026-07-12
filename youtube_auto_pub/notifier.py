@@ -37,15 +37,99 @@ import requests
 _STATE_PATH = os.path.expanduser("~/.youtube_auto_pub_notifier.json")
 
 
+# ---------------------------------------------------------------------- #
+# channels
+# ---------------------------------------------------------------------- #
+
+def _send_via_ntfy(title: str, message: str, priority: str) -> bool:
+    topic = os.getenv("NTFY_TOPIC")
+    if not topic:
+        return False
+    server = os.getenv("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    headers = {"Title": title, "Priority": priority}
+    token = os.getenv("NTFY_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    resp = requests.post(
+        f"{server}/{topic}",
+        data=message.encode("utf-8"),
+        headers=headers,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return True
+
+
+def _send_via_email(title: str, message: str, priority: str) -> bool:
+    user = os.getenv("NOTIFY_SMTP_USER") or os.getenv("GOOGLE_EMAIL")
+    password = os.getenv("NOTIFY_SMTP_PASSWORD") or os.getenv("GOOGLE_APP_PASSWORD")
+    if not user or not password:
+        return False
+    to_addr = os.getenv("NOTIFY_EMAIL_TO", user)
+    host = os.getenv("NOTIFY_SMTP_HOST", "smtp.gmail.com")
+    port = int(os.getenv("NOTIFY_SMTP_PORT", "465"))
+
+    msg = EmailMessage()
+    msg["Subject"] = title
+    msg["From"] = user
+    msg["To"] = to_addr
+    msg.set_content(message)
+
+    with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+        smtp.login(user, password)
+        smtp.send_message(msg)
+    return True
+
+
+_CHANNELS = (
+    ("ntfy", _send_via_ntfy),
+    ("email", _send_via_email),
+)
+
+
+# ---------------------------------------------------------------------- #
+# duplicate suppression
+# ---------------------------------------------------------------------- #
+
+class _DedupeStore:
+    """Persists when each dedupe key was last sent."""
+
+    def __init__(self, path: str):
+        self._path = path
+
+    def recently_sent(self, key: str) -> bool:
+        window = int(os.getenv("NOTIFY_DEDUPE_SECONDS", "3600"))
+        return (time.time() - self._load().get(key, 0)) < window
+
+    def mark_sent(self, key: str) -> None:
+        state = self._load()
+        state[key] = time.time()
+        # Drop stale entries so the file does not grow forever.
+        cutoff = time.time() - 7 * 24 * 3600
+        state = {k: v for k, v in state.items() if v > cutoff}
+        try:
+            with open(self._path, "w") as f:
+                json.dump(state, f)
+        except Exception as e:
+            print(f"[Notifier] Warning: could not persist dedupe state: {e}")
+
+    def _load(self) -> Dict[str, float]:
+        try:
+            with open(self._path, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+
+# ---------------------------------------------------------------------- #
+# public API
+# ---------------------------------------------------------------------- #
+
 class Notifier:
     """Send notifications through any channel configured via env vars."""
 
     def __init__(self, state_path: str = _STATE_PATH):
-        self._state_path = state_path
-
-    # ------------------------------------------------------------------ #
-    # public API
-    # ------------------------------------------------------------------ #
+        self._dedupe = _DedupeStore(state_path)
 
     def notify(
         self,
@@ -69,17 +153,14 @@ class Notifier:
         # Always mirror to stdout so the message appears in logs.
         print(f"[Notifier] {title}\n{message}")
 
-        if dedupe_key and self._recently_sent(dedupe_key):
+        if dedupe_key and self._dedupe.recently_sent(dedupe_key):
             print(f"[Notifier] Skipping duplicate notification: {dedupe_key}")
             return False
 
         delivered = False
-        for name, sender in (
-            ("ntfy", self._send_ntfy),
-            ("email", self._send_email),
-        ):
+        for name, send in _CHANNELS:
             try:
-                if sender(title, message, priority):
+                if send(title, message, priority):
                     print(f"[Notifier] Sent via {name}")
                     delivered = True
             except Exception as e:
@@ -90,78 +171,8 @@ class Notifier:
                   "Set NTFY_TOPIC and/or GOOGLE_APP_PASSWORD to enable alerts.")
 
         if delivered and dedupe_key:
-            self._mark_sent(dedupe_key)
+            self._dedupe.mark_sent(dedupe_key)
         return delivered
-
-    # ------------------------------------------------------------------ #
-    # channels
-    # ------------------------------------------------------------------ #
-
-    def _send_ntfy(self, title: str, message: str, priority: str) -> bool:
-        topic = os.getenv("NTFY_TOPIC")
-        if not topic:
-            return False
-        server = os.getenv("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
-        headers = {"Title": title, "Priority": priority}
-        token = os.getenv("NTFY_TOKEN")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        resp = requests.post(
-            f"{server}/{topic}",
-            data=message.encode("utf-8"),
-            headers=headers,
-            timeout=15,
-        )
-        resp.raise_for_status()
-        return True
-
-    def _send_email(self, title: str, message: str, priority: str) -> bool:
-        user = os.getenv("NOTIFY_SMTP_USER") or os.getenv("GOOGLE_EMAIL")
-        password = os.getenv("NOTIFY_SMTP_PASSWORD") or os.getenv("GOOGLE_APP_PASSWORD")
-        if not user or not password:
-            return False
-        to_addr = os.getenv("NOTIFY_EMAIL_TO", user)
-        host = os.getenv("NOTIFY_SMTP_HOST", "smtp.gmail.com")
-        port = int(os.getenv("NOTIFY_SMTP_PORT", "465"))
-
-        msg = EmailMessage()
-        msg["Subject"] = title
-        msg["From"] = user
-        msg["To"] = to_addr
-        msg.set_content(message)
-
-        with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
-            smtp.login(user, password)
-            smtp.send_message(msg)
-        return True
-
-    # ------------------------------------------------------------------ #
-    # dedupe state
-    # ------------------------------------------------------------------ #
-
-    def _load_state(self) -> Dict[str, float]:
-        try:
-            with open(self._state_path, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-
-    def _recently_sent(self, key: str) -> bool:
-        window = int(os.getenv("NOTIFY_DEDUPE_SECONDS", "3600"))
-        last = self._load_state().get(key, 0)
-        return (time.time() - last) < window
-
-    def _mark_sent(self, key: str) -> None:
-        state = self._load_state()
-        state[key] = time.time()
-        # Drop stale entries so the file does not grow forever.
-        cutoff = time.time() - 7 * 24 * 3600
-        state = {k: v for k, v in state.items() if v > cutoff}
-        try:
-            with open(self._state_path, "w") as f:
-                json.dump(state, f)
-        except Exception as e:
-            print(f"[Notifier] Warning: could not persist dedupe state: {e}")
 
 
 if __name__ == "__main__":

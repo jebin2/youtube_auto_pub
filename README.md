@@ -60,7 +60,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 Standalone one-time auth (without running your pipeline):
 
 ```bash
-python -m youtube_auto_pub.auth_worker \
+python -m youtube_auto_pub.auth \
     -c ./encrypt/ytcredentials.json -t ./encrypt/yttoken.json \
     -s "https://www.googleapis.com/auth/youtube.upload,https://www.googleapis.com/auth/youtube,https://www.googleapis.com/auth/youtube.force-ssl,https://www.googleapis.com/auth/userinfo.email" \
     --prompt
@@ -134,6 +134,24 @@ Rare (revoked token, password change, 6 months unused), and takes a minute:
 Replies are only accepted if newer than the current auth attempt and
 containing an OAuth `code=` parameter; the code is single-use, short-lived,
 and useless without your client secret.
+
+## Package layout
+
+One responsibility per module:
+
+```
+youtube_auto_pub/
+├── config.py         # YouTubeConfig dataclass — settings only
+├── notifier.py       # alert dispatch (ntfy + email) with duplicate suppression
+├── token_manager.py  # encrypted credential storage on HuggingFace Hub
+├── credentials.py    # client-secret resolution, token loading and refresh
+├── uploader.py       # YouTube API calls: service, upload, thumbnail, end screen
+└── auth/
+    ├── flow.py         # consent URL → code exchange → token persistence
+    ├── receivers.py    # how a response reaches us: file / ntfy reply / HF upload
+    ├── instructions.py # human-facing re-auth message
+    └── cli.py          # `python -m youtube_auto_pub.auth`
+```
 
 ## YouTubeConfig reference
 

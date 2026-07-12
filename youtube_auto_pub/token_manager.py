@@ -1,15 +1,14 @@
 """
-Token Manager for encrypted credential storage via HuggingFace Hub.
+Encrypted credential storage on HuggingFace Hub.
 
-Provides functionality to:
-- Encrypt and upload credential files to HuggingFace Hub
-- Download and decrypt credential files from HuggingFace Hub
+Files are Fernet-encrypted before upload and decrypted after download.
+The (private) repository is created automatically on first upload.
 """
 
 import os
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from huggingface_hub import hf_hub_download, HfApi
 from cryptography.fernet import Fernet
@@ -18,70 +17,38 @@ from youtube_auto_pub.config import YouTubeConfig
 
 
 class TokenManager:
-    """Manages encrypted credential storage via HuggingFace Hub.
-    
-    This class handles:
-    - Encrypting local credential files using Fernet encryption
-    - Uploading encrypted files to a HuggingFace Hub repository
-    - Downloading encrypted files from HuggingFace Hub
-    - Decrypting downloaded files for local use
-    
-    Example:
-        config = YouTubeConfig(
-            encrypt_path="./my_encrypt",
-            hf_repo_id="username/repo",
-            hf_token="hf_xxx",
-            encryption_key="your-fernet-key"
-        )
-        tm = TokenManager(config)
-        
-        # Download and decrypt a token file
-        local_path = tm.download_and_decrypt("yttoken.json")
-        
-        # Encrypt and upload token files
-        tm.encrypt_and_upload(["yttoken.json", "ytcredentials.json"])
-    """
-    
+    """Encrypt/decrypt credential files and sync them with HuggingFace Hub."""
+
     def __init__(self, config: YouTubeConfig):
-        """Initialize TokenManager with configuration.
-        
-        Args:
-            config: YouTubeConfig instance.
-        """
         self.config = config
-        
-        # Clean up existing encrypt directory by emptying it
-        # (Preserves the directory itself which might be a mount point)
+
+        # Start from a clean working directory (kept, not removed - it may
+        # be a mount point).
         self._create_directory(self.config.encrypt_path)
         self._empty_directory(self.config.encrypt_path)
-        
+
         if not self.config.encryption_key:
             raise ValueError("encryption_key is required in config or ENCRYPT_KEY env var")
-        
-        self._encryption_key = self.config.encryption_key.encode() if isinstance(
-            self.config.encryption_key, str
-        ) else self.config.encryption_key
+
+        self._encryption_key = (
+            self.config.encryption_key.encode()
+            if isinstance(self.config.encryption_key, str)
+            else self.config.encryption_key
+        )
 
     def encrypt_and_upload(self, local_file_paths: List[str]) -> None:
-        """Encrypt local files and upload to HuggingFace Hub.
-        
-        Args:
-            local_file_paths: List of local file paths to encrypt and upload.
-        """
+        """Encrypt local files and upload them to HuggingFace Hub."""
         fernet = Fernet(self._encryption_key)
-        
+
         for path in local_file_paths:
             if not os.path.exists(path):
                 print(f"[TokenManager] Skipping missing file: {path}")
                 continue
             with open(path, 'r') as f:
                 data = fernet.encrypt(f.read().encode())
-            
-            new_path = f'{self.config.encrypt_path}/{Path(path).name}'
-            
-            with open(new_path, "wb") as f:
+            with open(f'{self.config.encrypt_path}/{Path(path).name}', "wb") as f:
                 f.write(data)
-        
+
         api = HfApi(token=self.config.hf_token)
         # First-time setup: create the (private) repo if it does not exist yet.
         api.create_repo(
@@ -100,17 +67,15 @@ class TokenManager:
         print(f"[TokenManager] Encrypted and uploaded {len(local_file_paths)} files successfully.")
 
     def download_and_decrypt(self, file_name: str) -> str:
-        """Download encrypted file from HuggingFace Hub and decrypt it.
-        
-        Args:
-            file_name: Name of the file to download (not full path).
-            
+        """Download an encrypted file from HuggingFace Hub and decrypt it.
+
         Returns:
-            Local file path of the decrypted file (may not exist if file
-            was not found on HuggingFace Hub - first time setup).
+            Local path of the decrypted file. When the file does not exist on
+            the Hub yet (first-time setup) the path is returned anyway and
+            simply does not exist locally.
         """
         local_file_path = os.path.join(self.config.encrypt_path, file_name)
-        
+
         try:
             downloaded_path = hf_hub_download(
                 repo_id=self.config.hf_repo_id,
@@ -119,42 +84,22 @@ class TokenManager:
                 token=self.config.hf_token,
                 local_dir=self.config.encrypt_path
             )
-            
+
             fernet = Fernet(self._encryption_key)
             with open(downloaded_path, "rb") as f:
                 data = fernet.decrypt(f.read()).decode("utf-8")
-            
             with open(downloaded_path, "w") as f:
                 f.write(data)
-            
+
             print(f"[TokenManager] Downloaded and decrypted: {file_name}")
             return downloaded_path
         except Exception as e:
-            # File doesn't exist on HuggingFace Hub (first-time setup)
             print(f"[TokenManager] File not found on HuggingFace Hub: {file_name} ({e})")
             print(f"[TokenManager] This is expected for first-time setup. Returning local path: {local_file_path}")
             return local_file_path
 
     @staticmethod
-    def _dir_exists(path: str) -> bool:
-        """Check if directory exists."""
-        try:
-            return Path(path).is_dir()
-        except Exception:
-            return False
-
-    @staticmethod
-    def _remove_directory(path: str) -> None:
-        """Remove directory and all contents."""
-        try:
-            if Path(path).exists():
-                shutil.rmtree(path)
-        except Exception as e:
-            print(f"[TokenManager] Warning: Failed to delete {path}: {e}")
-
-    @staticmethod
     def _create_directory(path: str) -> None:
-        """Create directory if it doesn't exist."""
         try:
             os.makedirs(path, exist_ok=True)
         except Exception as e:
@@ -162,31 +107,18 @@ class TokenManager:
 
     @staticmethod
     def _empty_directory(path: str) -> None:
-        """Empty a directory but do not remove the directory itself."""
+        """Empty a directory without removing the directory itself."""
         try:
             if not os.path.isdir(path):
                 return
             for item in os.listdir(path):
                 item_path = os.path.join(path, item)
                 try:
-                    if os.path.isfile(item_path) or os.path.islink(item_path):
-                        os.remove(item_path)
-                    elif os.path.isdir(item_path):
+                    if os.path.isdir(item_path) and not os.path.islink(item_path):
                         shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
                 except Exception as e:
                     print(f"[TokenManager] Warning: Failed to delete item {item_path}: {e}")
         except Exception as e:
             print(f"[TokenManager] Warning: Failed to empty directory {path}: {e}")
-
-
-if __name__ == "__main__":
-    # Example usage
-    import sys
-    
-    if len(sys.argv) > 1:
-        files_to_upload = sys.argv[1:]
-        config = YouTubeConfig()
-        tm = TokenManager(config)
-        tm.encrypt_and_upload(files_to_upload)
-    else:
-        print("Usage: python token_manager.py <file1> <file2> ...")
