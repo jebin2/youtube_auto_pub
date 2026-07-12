@@ -8,14 +8,16 @@ Provides utilities for:
 """
 from youtube_auto_pub.config import YouTubeConfig
 from youtube_auto_pub.token_manager import TokenManager
+from youtube_auto_pub.notifier import Notifier
 from youtube_auto_pub.oauth_automater import GoogleOAuthAutomator
 from youtube_auto_pub.auth_worker import process_auth, process_auth_via_code
 from youtube_auto_pub.uploader import YouTubeUploader, VideoMetadata
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "YouTubeConfig",
-    "TokenManager", 
+    "TokenManager",
+    "Notifier",
     "GoogleOAuthAutomator",
     "process_auth",
     "process_auth_via_code",

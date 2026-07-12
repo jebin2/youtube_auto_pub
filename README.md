@@ -4,10 +4,60 @@ A standalone Python package for YouTube API automation with encrypted credential
 
 ## Features
 
-- **YouTubeUploader**: Complete video upload with thumbnails, resumable uploads, and progress tracking
+- **YouTubeUploader**: Complete video upload with thumbnails, resumable uploads, retry with backoff, and progress tracking
 - **TokenManager**: Encrypted credential storage via HuggingFace Hub using Fernet encryption
+- **Notifier**: Env-configured fallback notifications (ntfy.sh, Telegram, webhook, Gmail app-password email)
 - **GoogleOAuthAutomator**: Automated browser-based OAuth2 authentication with 2FA support
+- **Remote re-auth**: When re-authorization is ever needed, you get a notification with a link; approve from your phone and upload the response to your HuggingFace repo — no server access required
 - **YouTubeConfig**: Fully configurable settings via dataclass
+
+## Why not a service account?
+
+**Service accounts do not work with the YouTube Data API for normal channels.**
+Google explicitly does not support them: a video uploaded with a service
+account is not associated with any channel (uploads fail or end up orphaned).
+Service accounts only work for YouTube *Content Owner* (CMS) partner accounts,
+which regular creators do not have.
+
+The correct fully-automated setup is:
+
+1. **One-time** interactive OAuth consent → Google issues a **refresh token**.
+2. The refresh token silently mints new access tokens forever. No human needed.
+
+### Making the refresh token live forever
+
+This is the part that usually breaks people's automation:
+
+- In Google Cloud Console → *APIs & Services* → *OAuth consent screen*, set the
+  **Publishing status to "In production"** (External user type). While the app
+  is in **"Testing"** status, every refresh token **expires after 7 days**.
+  You do NOT need Google's verification review — an unverified production app
+  just shows a warning screen during the one-time consent.
+- The refresh token is only invalidated if you: change the Google account
+  password (only for some scopes), revoke access manually, don't use it for
+  ~6 months, or exceed 50 live refresh tokens per account per client.
+- When that ever happens, this package detects `invalid_grant`, notifies you,
+  and lets you re-authorize remotely (see Notifications below).
+
+## One-time setup
+
+1. Create a Google Cloud project, enable **YouTube Data API v3**, create an
+   **OAuth client ID** (type: *Desktop app*), download `ytcredentials.json`.
+2. Set the OAuth consent screen to **In production** (see above).
+3. Run the interactive auth once (on any machine with a terminal):
+
+```bash
+python -m youtube_auto_pub.auth_worker \
+    -c ./encrypt/ytcredentials.json \
+    -t ./encrypt/yttoken.json \
+    -s "https://www.googleapis.com/auth/youtube.upload,https://www.googleapis.com/auth/youtube,https://www.googleapis.com/auth/youtube.force-ssl,https://www.googleapis.com/auth/userinfo.email" \
+    --prompt
+```
+
+   Open the printed URL, approve, and paste back the final
+   `http://localhost/...` redirect URL.
+4. The pipeline (or `TokenManager.encrypt_and_upload`) encrypts and stores the
+   token on your HuggingFace repo. From this point everything is unattended.
 
 ## Installation
 
@@ -90,10 +140,56 @@ The `YouTubeConfig` dataclass accepts the following parameters:
 export HF_TOKEN="hf_your_huggingface_token"
 export ENCRYPT_KEY="your-fernet-encryption-key"
 
-# Optional for OAuth automation
+# Optional for OAuth browser automation
 export GOOGLE_EMAIL="your@gmail.com"
-export GOOGLE_PASSWORD="your_app_password"
+export GOOGLE_PASSWORD="your_google_password"
+
+# Notifications (configure at least one channel for unattended operation)
+export NTFY_TOPIC="my-yt-pipeline"                  # push via https://ntfy.sh (zero signup)
+export TELEGRAM_BOT_TOKEN="123:abc"                 # Telegram bot
+export TELEGRAM_CHAT_ID="123456"
+export NOTIFY_WEBHOOK_URL="https://hooks.slack..."  # Slack/Discord/any JSON webhook
+export GOOGLE_APP_PASSWORD="abcd efgh ijkl mnop"    # Gmail app password -> email alerts
+export NOTIFY_EMAIL_TO="you@example.com"            # defaults to GOOGLE_EMAIL
+
+# Tuning (all optional)
+export NOTIFY_DEDUPE_SECONDS=3600    # suppress duplicate alerts within this window
+export AUTH_CODE_WAIT_SECONDS=1800   # how long to wait for a manual auth response
+export AUTH_CODE_POLL_SECONDS=15     # poll interval while waiting
+export AUTH_RESPONSE_FILENAME="auth_response.txt"  # filename polled on the HF repo
+export UPLOAD_MAX_RETRIES=5          # retries for transient upload errors
 ```
+
+## Notifications & remote re-authorization
+
+`Notifier` sends alerts through **every channel configured via env vars** and
+mirrors everything to stdout. Channels: [ntfy.sh](https://ntfy.sh) (easiest —
+install the app, pick a topic name, set `NTFY_TOPIC`, done), Telegram bot,
+generic webhook (Slack/Discord payloads auto-detected), and email via Gmail
+app password.
+
+You get alerted when:
+
+- the refresh token is permanently rejected (`invalid_grant`) and re-auth starts
+- (re)authorization is required and browser automation failed — the alert
+  contains the auth URL and instructions
+- authorization succeeds again
+- token refresh keeps failing for transient reasons (network/Google outage)
+- a video upload fails after all retries
+
+### Completing re-auth from your phone
+
+If re-authorization is ever needed on a headless server:
+
+1. You receive a notification containing the Google consent URL. Open it and
+   approve.
+2. The browser redirects to `http://localhost/...` which fails to load —
+   expected. Copy that full URL from the address bar.
+3. Upload it as `auth_response.txt` to your HuggingFace token repo (or write
+   it to the configured `authorization_code_path` on the server).
+4. The pipeline (which polls for up to `AUTH_CODE_WAIT_SECONDS`) picks it up,
+   completes the token exchange, deletes the file, and notifies you of
+   success. Publishing resumes automatically.
 
 ## Components
 

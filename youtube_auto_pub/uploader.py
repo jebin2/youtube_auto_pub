@@ -17,12 +17,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Any
 
+from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
 
 from youtube_auto_pub.config import YouTubeConfig
+from youtube_auto_pub.notifier import Notifier
 from youtube_auto_pub.token_manager import TokenManager
 
 
@@ -89,6 +92,7 @@ class YouTubeUploader:
         """
         self.config = config
         self.token_manager = TokenManager(self.config)
+        self.notifier = Notifier()
         self._services: dict = {}
 
     def _extract_client_id(self, client_path: str) -> Optional[str]:
@@ -272,18 +276,14 @@ class YouTubeUploader:
             except Exception as e:
                 print(f"[Uploader] Error loading credentials: {e}")
 
-        # Refresh expired credentials
+        # Refresh expired credentials.
+        # Transient failures (network blips, 5xx from Google) are retried with
+        # backoff and then raised so the caller's retry loop can try again
+        # later - they must NOT trigger a full re-authentication.
+        # Only a genuinely dead grant (revoked/expired refresh token) falls
+        # through to the auth flow.
         if creds and creds.expired and creds.refresh_token:
-            try:
-                print("[Uploader] Refreshing expired credentials...")
-                creds.refresh(Request())
-                print("[Uploader] Credentials refreshed successfully.")
-                with open(local_token_path, 'w') as token:
-                    token.write(creds.to_json())
-                    print(f"[Uploader] Credentials saved to {local_token_path}.")
-            except Exception as e:
-                print(f"[Uploader] Error refreshing token: {e}")
-                creds = None
+            creds = self._refresh_with_retry(creds, local_token_path)
 
         # Run auth flow if needed
         if not creds or not creds.valid:
@@ -292,7 +292,19 @@ class YouTubeUploader:
                     print("[Uploader] No valid credentials. Skipping auth flow (skip_auth_flow=True).")
                     return None
                 print("[Uploader] No valid credentials or refresh token. Initiating authentication flow.")
-                creds = self._run_auth_flow()
+                try:
+                    creds = self._run_auth_flow()
+                except Exception as e:
+                    self.notifier.notify(
+                        title="YouTube authorization failed",
+                        message=(
+                            "Automated (re)authorization did not complete: "
+                            f"{e}\nThe pipeline will retry on the next cycle."
+                        ),
+                        priority="urgent",
+                        dedupe_key="yt-auth-failed",
+                    )
+                    raise
 
         # Upload updated credentials
         self.token_manager.encrypt_and_upload([local_token_path, local_client_path])
@@ -324,20 +336,88 @@ class YouTubeUploader:
         
         return service
 
+    def _refresh_with_retry(self, creds: Credentials, local_token_path: str) -> Optional[Credentials]:
+        """Refresh OAuth credentials, retrying transient errors with backoff.
+
+        Returns:
+            Refreshed credentials on success, or None if the refresh token is
+            permanently invalid (revoked/expired) and re-authentication is
+            required.
+
+        Raises:
+            RuntimeError: If refresh keeps failing for transient reasons.
+                Callers should let this propagate so the outer loop retries
+                later instead of discarding a still-valid refresh token.
+        """
+        delays = [2, 4, 8, 16]
+        last_error = None
+        for attempt, delay in enumerate([0] + delays):
+            if delay:
+                print(f"[Uploader] Retrying token refresh in {delay}s (attempt {attempt}/{len(delays)})...")
+                time.sleep(delay)
+            try:
+                print("[Uploader] Refreshing expired credentials...")
+                creds.refresh(Request())
+                print("[Uploader] Credentials refreshed successfully.")
+                with open(local_token_path, 'w') as token:
+                    token.write(creds.to_json())
+                    print(f"[Uploader] Credentials saved to {local_token_path}.")
+                return creds
+            except RefreshError as e:
+                message = str(e).lower()
+                if 'invalid_grant' in message or 'invalid_rapt' in message or 'deleted_client' in message:
+                    print(f"[Uploader] Refresh token permanently invalid ({e}). Re-authentication required.")
+                    self.notifier.notify(
+                        title="YouTube re-authorization needed",
+                        message=(
+                            "The stored YouTube refresh token was rejected by Google "
+                            f"({e}).\nCommon causes: OAuth consent screen still in "
+                            "'Testing' status (tokens expire after 7 days - publish "
+                            "the app to Production), password change, or manual "
+                            "revocation.\nStarting the re-authorization flow now."
+                        ),
+                        priority="urgent",
+                        dedupe_key="yt-token-invalid",
+                    )
+                    return None
+                last_error = e
+                print(f"[Uploader] Transient refresh error: {e}")
+            except Exception as e:
+                last_error = e
+                print(f"[Uploader] Transient refresh error: {e}")
+
+        self.notifier.notify(
+            title="YouTube token refresh failing",
+            message=(
+                f"Token refresh failed {len(delays) + 1} times in a row "
+                f"(last error: {last_error}).\nThe refresh token is kept and the "
+                "pipeline will retry on the next cycle. Check network/Google API "
+                "status if this persists."
+            ),
+            priority="high",
+            dedupe_key="yt-refresh-transient",
+        )
+        raise RuntimeError(f"Token refresh failed after retries: {last_error}")
+
     def _run_auth_flow(self) -> Credentials:
         """Run OAuth authentication flow.
-        
+
         Returns:
             Authenticated credentials
         """
         from youtube_auto_pub.auth_worker import process_auth_via_code
         from youtube_auto_pub.oauth_automater import GoogleOAuthAutomator
-        
+
         if self.config.headless_mode:
-            # Headless mode - use code-based auth
+            # Headless mode - use code-based auth. Only prompt on stdin when a
+            # human is actually attached; otherwise wait for the response via
+            # file or HuggingFace upload (unattended servers must never block
+            # on input()).
+            interactive = (not self.config.is_docker) and sys.stdin.isatty()
             process_auth_via_code(
                 self.config,
-                prompt=not self.config.is_docker
+                prompt=interactive,
+                notifier=None if interactive else self.notifier
             )
             return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
         else:
@@ -363,19 +443,32 @@ class YouTubeUploader:
                 env={**os.environ, 'PYTHONUNBUFFERED': '1'}
             )
             
+            def _automate_or_notify(auth_url: str) -> None:
+                """Try browser automation; on failure alert a human so they
+                can complete authorization manually (the subprocess keeps
+                polling for the response file / HuggingFace upload)."""
+                try:
+                    automator = GoogleOAuthAutomator(config=self.config)
+                    automator.authorize_oauth(auth_url)
+                except Exception as e:
+                    print(f"[Uploader] Browser automation failed: {e}")
+                    from youtube_auto_pub.auth_worker import build_reauth_instructions
+                    self.notifier.notify(
+                        title="YouTube authorization required (automation failed)",
+                        message=build_reauth_instructions(self.config, auth_url),
+                        priority="urgent",
+                        dedupe_key="yt-auth-required",
+                    )
+
             for line in process.stdout:
                 print(f"[Auth] {line.strip()}")  # Debug output
                 # Check for both formats
                 if "Please visit this URL to authorize this application:" in line:
                     # Format: Please visit this URL to authorize this application: https://...
-                    auth_url = f'https://{line.strip().split("https://")[-1]}'
-                    automator = GoogleOAuthAutomator(config=self.config)
-                    automator.authorize_oauth(auth_url)
+                    _automate_or_notify(f'https://{line.strip().split("https://")[-1]}')
                 elif "authorization_url####" in line:
                     # Format: authorization_url####https://...
-                    auth_url = line.strip().split("####")[-1]
-                    automator = GoogleOAuthAutomator(config=self.config)
-                    automator.authorize_oauth(auth_url)
+                    _automate_or_notify(line.strip().split("####")[-1])
                 elif "Credentials saved to" in line:
                     return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
             
@@ -418,7 +511,7 @@ class YouTubeUploader:
         if metadata.publish_at:
             request_body['status']['publishAt'] = metadata.publish_at
 
-        # Upload the video
+        # Upload the video (resumable, with retry on transient errors)
         media_file = MediaFileUpload(video_path, chunksize=-1, resumable=True)
         request = service.videos().insert(
             part='snippet,status',
@@ -428,15 +521,38 @@ class YouTubeUploader:
 
         print(f"[Uploader] Uploading video: {video_path}")
         response = None
-        
-        try:
-            while response is None:
+        retriable_status_codes = (500, 502, 503, 504)
+        max_retries = int(os.getenv("UPLOAD_MAX_RETRIES", "5"))
+        retry = 0
+
+        while response is None:
+            try:
                 status, response = request.next_chunk()
                 if status:
                     print(f'[Uploader] Uploaded {int(status.progress() * 100)}% of the video.')
-        except Exception as e:
-            print(f"[Uploader] Error during video upload: {e}")
-            return None
+                retry = 0  # progress made, reset the retry budget
+            except HttpError as e:
+                if e.resp.status in retriable_status_codes and retry < max_retries:
+                    retry += 1
+                    sleep_seconds = min(2 ** retry, 64)
+                    print(f"[Uploader] Retriable HTTP {e.resp.status} during upload. "
+                          f"Retry {retry}/{max_retries} in {sleep_seconds}s...")
+                    time.sleep(sleep_seconds)
+                    continue
+                print(f"[Uploader] Error during video upload: {e}")
+                self._notify_upload_failure(video_path, metadata.title, e)
+                return None
+            except Exception as e:
+                if retry < max_retries:
+                    retry += 1
+                    sleep_seconds = min(2 ** retry, 64)
+                    print(f"[Uploader] Transient error during upload: {e}. "
+                          f"Retry {retry}/{max_retries} in {sleep_seconds}s...")
+                    time.sleep(sleep_seconds)
+                    continue
+                print(f"[Uploader] Error during video upload: {e}")
+                self._notify_upload_failure(video_path, metadata.title, e)
+                return None
 
         video_id = response['id']
         print(f'[Uploader] Video uploaded successfully with ID: {video_id}')
@@ -446,6 +562,18 @@ class YouTubeUploader:
             self.set_thumbnail(service, video_id, thumbnail_path)
 
         return video_id
+
+    def _notify_upload_failure(self, video_path: str, title: str, error: Exception) -> None:
+        """Alert the user that an upload failed after exhausting retries."""
+        self.notifier.notify(
+            title="YouTube upload failed",
+            message=(
+                f"Video: {title}\nFile: {video_path}\nError: {error}\n"
+                "The pipeline will retry on the next cycle."
+            ),
+            priority="high",
+            dedupe_key=f"yt-upload-failed:{os.path.basename(video_path)}",
+        )
 
     def add_end_screen_video(
         self,
