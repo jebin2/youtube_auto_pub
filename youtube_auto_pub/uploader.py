@@ -402,11 +402,25 @@ class YouTubeUploader:
     def _run_auth_flow(self) -> Credentials:
         """Run OAuth authentication flow.
 
+        The flow is selected by the AUTH_MODE environment variable:
+            notify - never launch a browser. Send the consent URL through the
+                     configured notification channels and wait for the human
+                     to send the redirect URL back (ntfy reply topic,
+                     HuggingFace upload, or local file).
+            auto   - (default) browser automation when a display is available,
+                     otherwise the same notification flow as "notify".
+
         Returns:
             Authenticated credentials
         """
         from youtube_auto_pub.auth_worker import process_auth_via_code
-        from youtube_auto_pub.oauth_automater import GoogleOAuthAutomator
+
+        auth_mode = os.getenv("AUTH_MODE", "auto").strip().lower()
+        if auth_mode == "notify":
+            print("[Uploader] AUTH_MODE=notify - skipping browser automation, "
+                  "using notification-based authorization.")
+            process_auth_via_code(self.config, prompt=False, notifier=self.notifier)
+            return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
 
         if self.config.headless_mode:
             # Headless mode - use code-based auth. Only prompt on stdin when a
@@ -422,18 +436,20 @@ class YouTubeUploader:
             return Credentials.from_authorized_user_file(self.config.token_file_path, self.config.scopes)
         else:
             # GUI mode - use subprocess + browser automation
+            from youtube_auto_pub.oauth_automater import GoogleOAuthAutomator
+
             cmd = [
-                sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker', 
-                '-c', self.config.client_id_path, 
-                '-t', self.config.token_file_path, 
+                sys.executable, '-u', '-m', 'youtube_auto_pub.auth_worker',
+                '-c', self.config.client_id_path,
+                '-t', self.config.token_file_path,
                 '-s', ','.join(self.config.scopes),
-                '--code-path', self.config.authorization_code_path
+                '--code-path', self.config.authorization_code_path,
+                # File mode: the subprocess polls for the auth response instead
+                # of running a local callback server (more stable in remote and
+                # containerised environments).
+                '--file-mode'
             ]
-            
-            # Use file-mode if we suspect network isolation (e.g. Docker)
-            if self.config.is_docker or True: # Force file mode for better stability in remote envs
-                 cmd.append('--file-mode')
-                 
+
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,

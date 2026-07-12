@@ -155,6 +155,13 @@ export NTFY_TOKEN="tk_..."               # access token for protected topics
 export NTFY_REPLY_TOPIC="my-yt-reply"    # topic polled for auth responses
                                          # (default: "<NTFY_TOPIC>-reply")
 
+# Authorization flow
+export AUTH_MODE=notify              # "notify" = never launch a browser: send the
+                                     # consent URL as a notification and wait for the
+                                     # redirect URL via ntfy reply / HF upload / file.
+                                     # "auto" (default) = browser automation when a
+                                     # display is available, else same as notify.
+
 # Tuning (all optional)
 export NOTIFY_DEDUPE_SECONDS=3600    # suppress duplicate alerts within this window
 export AUTH_CODE_WAIT_SECONDS=1800   # how long to wait for a manual auth response
