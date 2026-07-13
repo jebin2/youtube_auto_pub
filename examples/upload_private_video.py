@@ -43,8 +43,7 @@ def make_test_clip(path: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Upload a private test video to YouTube.")
     parser.add_argument("video", nargs="?", help="Video file (default: generate a 2s clip)")
-    parser.add_argument("--delete-after", action="store_true",
-                        help="Delete the video again after a successful upload")
+    parser.add_argument("--delete-after", action="store_true", help="Delete the video again after a successful upload")
     args = parser.parse_args()
 
     tmp_dir = None
@@ -89,4 +88,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
     main()
