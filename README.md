@@ -203,6 +203,15 @@ youtube_auto_pub/
     └── cli.py          # python -m youtube_auto_pub.auth
 ```
 
+## Tests
+
+Hermetic — no network, no real Google/HuggingFace calls, safe to run anywhere:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
 ## License
 
 MIT

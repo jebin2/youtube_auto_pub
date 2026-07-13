@@ -50,3 +50,6 @@ youtube-auth = "youtube_auto_pub.auth.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["youtube_auto_pub*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
