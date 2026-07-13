@@ -205,11 +205,19 @@ youtube_auto_pub/
 
 ## Tests
 
-Hermetic — no network, no real Google/HuggingFace calls, safe to run anywhere:
+Unit tests are hermetic — no network, no real Google/HuggingFace calls,
+safe to run anywhere:
 
 ```bash
 pip install -e ".[dev]"
 pytest
+```
+
+For a real end-to-end check against your actual account (uploads a
+2-second **private** test clip, optionally deletes it again):
+
+```bash
+python examples/upload_private_video.py --delete-after
 ```
 
 ## License
