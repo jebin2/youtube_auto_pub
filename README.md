@@ -132,7 +132,8 @@ python -m youtube_auto_pub.notifier "Test" "Hello"   # test your channels
 ## Re-authorization from your phone
 
 Happens only if the refresh token is revoked, the account password changes,
-or the token goes unused ~6 months:
+or the token goes unused ~6 months. Set `AUTH_MODE=notify` so the pipeline
+pushes the link instead of waiting on stdin:
 
 1. Push notification arrives with the consent URL → open, approve.
 2. The redirect to `http://localhost/...` fails to load — expected.
@@ -160,6 +161,7 @@ but still keep the topic names unguessable.
 | `HF_YT_CRED_REPO_ID` | yes | HuggingFace dataset repo for credentials |
 | `ENCRYPT_KEY` | yes | Fernet key |
 | `NTFY_TOPIC` | recommended | ntfy topic for push alerts |
+| `AUTH_MODE` | optional | `auto` (default): prompt on stdin only if a terminal is attached. `notify`: always push the consent URL and poll for the reply — **use this for unattended pipelines**. `prompt`: always read stdin. |
 | `GOOGLE_EMAIL` / `GOOGLE_APP_PASSWORD` | optional | email alert channel |
 | `NOTIFY_EMAIL_TO` | optional | email recipient (default: sender) |
 | `NTFY_REPLY_TOPIC` | optional | auth-response topic (default `<NTFY_TOPIC>-reply`) |

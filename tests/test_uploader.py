@@ -57,6 +57,36 @@ def test_get_service_skip_auth_flow(uploader, config, monkeypatch):
     assert uploader.get_service(skip_auth_flow=True) is None
 
 
+@pytest.mark.parametrize("mode, isatty, expect_prompt", [
+    ("notify", True, False),   # notify wins even with a TTY
+    ("notify", False, False),
+    ("prompt", False, True),   # prompt wins even without a TTY
+    ("auto", True, True),      # auto follows the terminal
+    ("auto", False, False),
+    (None, True, True),        # unset == auto
+    (None, False, False),
+])
+def test_auth_mode_selects_flow(uploader, monkeypatch, mode, isatty, expect_prompt):
+    if mode is None:
+        monkeypatch.delenv("AUTH_MODE", raising=False)
+    else:
+        monkeypatch.setenv("AUTH_MODE", mode)
+    monkeypatch.setattr(up_mod.sys.stdin, "isatty", lambda: isatty)
+
+    captured = {}
+    monkeypatch.setattr(up_mod, "run_code_flow",
+                        lambda config, prompt, notifier: captured.update(
+                            prompt=prompt, notified=notifier is not None))
+    monkeypatch.setattr(up_mod.Credentials, "from_authorized_user_file",
+                        classmethod(lambda cls, *a: "creds"))
+
+    uploader._run_auth_flow()
+
+    assert captured["prompt"] is expect_prompt
+    # Notification is sent exactly when we are NOT prompting on stdin.
+    assert captured["notified"] is (not expect_prompt)
+
+
 def test_auth_failure_notifies_and_raises(uploader, notifier, monkeypatch):
     def failing_flow(config, prompt=False, notifier=None):
         raise ValueError("No authorization code received")

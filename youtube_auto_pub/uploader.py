@@ -108,15 +108,32 @@ class YouTubeUploader:
             self._services[cache_key] = service
         return service
 
+    @staticmethod
+    def _use_stdin_prompt() -> bool:
+        """Decide how the auth response is collected, via AUTH_MODE:
+
+            notify - always use the notification flow (push the consent URL,
+                     poll ntfy/HF/file); never blocks on stdin. Use this for
+                     unattended pipelines, even when started from a shell.
+            prompt - always read the redirect URL from stdin.
+            auto   - (default) prompt only when a real terminal is attached.
+        """
+        mode = os.getenv("AUTH_MODE", "auto").strip().lower()
+        if mode == "notify":
+            return False
+        if mode == "prompt":
+            return True
+        return sys.stdin.isatty()
+
     def _run_auth_flow(self) -> Credentials:
         """Run the OAuth authorization flow (no browser automation).
 
-        With a terminal attached the redirect URL is read from stdin
-        (one-time setup); unattended, the consent URL goes out as a
-        notification and the response is awaited via ntfy / HuggingFace /
-        local file.
+        Interactive (AUTH_MODE=prompt, or a TTY under the default 'auto'):
+        the redirect URL is read from stdin. Otherwise the consent URL goes
+        out as a notification and the response is awaited via ntfy /
+        HuggingFace / local file.
         """
-        interactive = sys.stdin.isatty()
+        interactive = self._use_stdin_prompt()
         try:
             run_code_flow(
                 self.config,
